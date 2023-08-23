@@ -3,6 +3,7 @@
 #include "../utils.h"
 #include "../output.h"
 #include "tcp_socket.h"
+#include "tcp6_socket.h"
 #include "strfnd.h"
 
 #ifdef SERVER
@@ -23,7 +24,9 @@ constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 class ServerConnection : public Connection {
 	int& id;
 	ServerMain* server;
+	bool ipv6;
 	TCPSocket tcp_socket{ "Server" };
+	TCP6Socket tcp6_socket{ "Server" };
 	std::mutex m_send_mutex;
 
 	std::queue<std::unique_ptr<Packet>> m_self_queue;
@@ -49,25 +52,50 @@ protected:
 public:
 	ServerConnection(int &_id, ServerMain* _server, sockpp::tcp_socket& _socket)
 			: id(_id), server(_server) {
+		ipv6 = false;
 		tcp_socket.InitSocket(_socket);
 	}
 
+	ServerConnection(int &_id, ServerMain* _server, sockpp::tcp6_socket& _socket)
+			: id(_id), server(_server) {
+		ipv6 = true;
+		tcp6_socket.InitSocket(_socket);
+	}
+
 	void Open() override {
-		tcp_socket.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
-		tcp_socket.OnOpen = [this]() { HandleOpen(); };
-		tcp_socket.OnClose = [this]() { HandleClose(); };
-		tcp_socket.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
-		tcp_socket.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
-		tcp_socket.CreateConnectionThread(server->GetConfig().no_heartbeats.Get() ? 0 : 6);
+		if (ipv6)
+		{
+			tcp6_socket.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
+			tcp6_socket.OnOpen = [this]() { HandleOpen(); };
+			tcp6_socket.OnClose = [this]() { HandleClose(); };
+			tcp6_socket.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
+			tcp6_socket.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
+			tcp6_socket.CreateConnectionThread(server->GetConfig().no_heartbeats.Get() ? 0 : 6);
+		}
+		else
+		{
+			tcp_socket.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
+			tcp_socket.OnOpen = [this]() { HandleOpen(); };
+			tcp_socket.OnClose = [this]() { HandleClose(); };
+			tcp_socket.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
+			tcp_socket.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
+			tcp_socket.CreateConnectionThread(server->GetConfig().no_heartbeats.Get() ? 0 : 6);
+		}
 	}
 
 	void Close() override {
-		tcp_socket.Close();
+		if (ipv6)
+			tcp6_socket.Close();
+		else
+			tcp_socket.Close();
 	}
 
 	void Send(std::string_view data) override {
 		std::lock_guard lock(m_send_mutex);
-		tcp_socket.Send(data); // send to self
+		if (ipv6)
+			tcp6_socket.Send(data); // send to self
+		else
+			tcp_socket.Send(data); // send to self
 	}
 
 	template<typename T>
@@ -373,9 +401,15 @@ class ServerSideClient {
 	}
 
 public:
+	ServerSideClient(ServerMain* _server, int _id, sockpp::tcp6_socket& _socketIPV6)
+		: server(_server), id(_id),
+		connection(ServerConnection(id, _server, _socketIPV6)) {
+		InitConnection();
+	}
+
 	ServerSideClient(ServerMain* _server, int _id, sockpp::tcp_socket& _socket)
-			: server(_server), id(_id),
-			connection(ServerConnection(id, _server, _socket)) {
+		: server(_server), id(_id),
+		connection(ServerConnection(id, _server, _socket)) {
 		InitConnection();
 	}
 
@@ -481,40 +515,82 @@ void ServerMain::Start(bool blocking) {
 
 	std::thread server_thread([this]() {
 		acceptor = sockpp::tcp_acceptor(sockpp::inet_address(addr_host, addr_port),
-				Connection::MAX_QUEUE_SIZE);
-		if (!acceptor) {
-			Stop();
-			Output::Warning("Server: Failed to create the acceptor to {}:{}: {}",
-				addr_host, addr_port, acceptor.last_error_str());
-			return;
+		Connection::MAX_QUEUE_SIZE);
+	if (!acceptor) {
+		Stop();
+		Output::Warning("Server: Failed to create the acceptor to {}:{}: {}",
+			addr_host, addr_port, acceptor.last_error_str());
+		return;
+	}
+	Output::Debug("Server: Awaiting connections on {}:{}...", addr_host, addr_port);
+	while (true) {
+		sockpp::tcp_socket socket = acceptor.accept();
+		if (!socket) {
+			// Stop() executed
+			if (!running) {
+				break;
+			}
+			Output::Warning("Server: Failed to get the incoming connection: ",
+				acceptor.last_error_str());
 		}
-		Output::Debug("Server: Awaiting connections on {}:{}...", addr_host, addr_port);
-		while (true) {
-			sockpp::tcp_socket socket = acceptor.accept();
-			if (!socket) {
-				// Stop() executed
-				if (!running) {
-					break;
-				}
-				Output::Warning("Server: Failed to get the incoming connection: ",
-					acceptor.last_error_str());
-			} else {
-				if (clients.size() >= cfg.server_max_users.Get()) {
-					socket.write(std::string("\x04\x00\uFFFD1", 6));
-					socket.close();
-				} else {
-					auto& client = clients[client_id];
-					client.reset(new ServerSideClient(this, client_id++, socket));
-					client->Open();
-				}
+		else {
+			if (clients.size() >= cfg.server_max_users.Get()) {
+				socket.write(std::string("\x04\x00\uFFFD1", 6));
+				socket.close();
+			}
+			else {
+				auto& client = clients[client_id];
+				client.reset(new ServerSideClient(this, client_id++, socket));
+				client->Open();
 			}
 		}
-	});
+	}
+		});
+
+	std::thread server_thread_v6([this]() {
+		acceptorV6 = sockpp::tcp6_acceptor(sockpp::inet6_address(addr_host, addr_port),
+		Connection::MAX_QUEUE_SIZE);
+	if (!acceptorV6) {
+		Stop();
+		Output::Warning("Server: Failed to create the acceptorV6 to {}:{}: {}",
+			addr_host, addr_port, acceptorV6.last_error_str());
+		return;
+	}
+	Output::Debug("Server: Awaiting ipv6 connections on {}:{}...", addr_host, addr_port);
+	while (true) {
+		sockpp::tcp6_socket socket = acceptorV6.accept();
+		if (!socket) {
+			// Stop() executed
+			if (!running) {
+				break;
+			}
+			Output::Warning("Server: Failed to get the incoming connection: ",
+				acceptorV6.last_error_str());
+		}
+		else {
+			if (clients.size() >= cfg.server_max_users.Get()) {
+				socket.write(std::string("\x04\x00\uFFFD1", 6));
+				socket.close();
+			}
+			else {
+				auto& client = clients[client_id];
+				client.reset(new ServerSideClient(this, client_id++, socket));
+				client->Open();
+			}
+		}
+	}
+		});
 
 	if (blocking)
+	{
 		server_thread.join();
+		server_thread_v6.join();
+	}
 	else
+	{
 		server_thread.detach();
+		server_thread_v6.detach();
+	}
 }
 
 void ServerMain::Stop() {
@@ -527,6 +603,7 @@ void ServerMain::Stop() {
 		it.second->Close();
 	}
 	acceptor.shutdown();
+	acceptorV6.shutdown();
 	// stop message queue loop
 	m_message_data_queue.emplace(new MessageDataEntry{ 0, 0, Messages::CV_NULL, "" });
 	m_message_data_queue_cv.notify_one();

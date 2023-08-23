@@ -61,20 +61,40 @@ void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
 	connecting = true;
+	isIPV6 = (addr_host.find(":") != std::string::npos);
 	std::thread([this]() {
-		connector = sockpp::tcp_connector({addr_host, addr_port}, std::chrono::seconds(6));
-		if (!connector) {
-			HandleClose();
-			Output::Warning("MP: Error connecting to server: {}", connector.last_error_str());
-			return;
+		if (isIPV6)
+		{
+			connectorV6 = sockpp::tcp6_connector({ addr_host, addr_port }, std::chrono::seconds(6));
+			if (!connectorV6) {
+				HandleClose();
+				Output::Warning("MP: Error connecting to server: {}, Address: {}", connectorV6.last_error_str(), (addr_host + std::to_string(addr_port)));
+				return;
+			}
+			tcp6_socket.InitSocket(connectorV6.clone());
+			tcp6_socket.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
+			tcp6_socket.OnOpen = [this]() { HandleOpen(); };
+			tcp6_socket.OnClose = [this]() { HandleClose(); };
+			tcp6_socket.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
+			tcp6_socket.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
+			tcp6_socket.CreateConnectionThread(cfg->no_heartbeats.Get() ? 0 : 6);
 		}
-		tcp_socket.InitSocket(connector.clone());
-		tcp_socket.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
-		tcp_socket.OnOpen = [this]() { HandleOpen(); };
-		tcp_socket.OnClose = [this]() { HandleClose(); };
-		tcp_socket.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
-		tcp_socket.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
-		tcp_socket.CreateConnectionThread(cfg->no_heartbeats.Get() ? 0 : 6);
+		else
+		{
+			connector = sockpp::tcp_connector({ addr_host, addr_port }, std::chrono::seconds(6));
+			if (!connector) {
+				HandleClose();
+				Output::Warning("MP: Error connecting to server: {}", connector.last_error_str());
+				return;
+			}
+			tcp_socket.InitSocket(connector.clone());
+			tcp_socket.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
+			tcp_socket.OnOpen = [this]() { HandleOpen(); };
+			tcp_socket.OnClose = [this]() { HandleClose(); };
+			tcp_socket.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
+			tcp_socket.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
+			tcp_socket.CreateConnectionThread(cfg->no_heartbeats.Get() ? 0 : 6);
+		}
 	}).detach();
 }
 
@@ -82,7 +102,13 @@ void ClientConnection::Close() {
 	connecting = false;
 	if (!connected)
 		return;
-	tcp_socket.Close();
+	if (isIPV6)
+	{
+		isIPV6 = false;
+		tcp6_socket.Close();
+	}
+	else
+		tcp_socket.Close();
 	m_queue = decltype(m_queue){};
 	connected = false;
 }
@@ -90,7 +116,10 @@ void ClientConnection::Close() {
 void ClientConnection::Send(std::string_view data) {
 	if (!connected)
 		return;
-	tcp_socket.Send(data);
+	if (isIPV6)
+		tcp6_socket.Send(data);
+	else
+		tcp_socket.Send(data);
 }
 
 void ClientConnection::Receive() {

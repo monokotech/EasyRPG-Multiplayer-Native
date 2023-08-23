@@ -206,7 +206,7 @@ void Player::Init(std::vector<std::string> args) {
 
 	DisplayUi.reset();
 
-	if(! DisplayUi) {
+	if(!DisplayUi) {
 		DisplayUi = BaseUi::CreateUi(Player::screen_width, Player::screen_height, cfg);
 	}
 
