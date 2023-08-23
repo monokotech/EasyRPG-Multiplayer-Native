@@ -84,7 +84,10 @@ public:
 	}
 
 	void Close() override {
-		tcp_socket.Close();
+		if (ipv6)
+			tcp6_socket.Close();
+		else
+			tcp_socket.Close();
 	}
 
 	void Send(std::string_view data) override {
