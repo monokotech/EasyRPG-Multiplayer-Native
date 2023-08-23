@@ -477,8 +477,6 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/server.h
 	src/multiplayer/tcp_socket.cpp
 	src/multiplayer/tcp_socket.h
- 	src/multiplayer/tcp6_socket.cpp
-	src/multiplayer/tcp6_socket.h
 	src/multiplayer/game_multiplayer.h
 	src/multiplayer/game_playerother.h
 	src/multiplayer/messages.h
@@ -498,7 +496,6 @@ add_library(${PROJECT_NAME}_server OBJECT
 	src/utils.cpp
 	src/multiplayer/connection.cpp
 	src/multiplayer/tcp_socket.cpp
- 	src/multiplayer/tcp6_socket.cpp
 	src/multiplayer/packet.cpp
 )
 

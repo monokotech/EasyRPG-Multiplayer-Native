@@ -8,7 +8,6 @@
 #include <mutex>
 #include "messages.h"
 #include "sockpp/tcp_acceptor.h"
-#include "sockpp/tcp6_acceptor.h"
 #include "../game_config.h"
 
 class ServerSideClient;
@@ -21,7 +20,6 @@ class ServerMain {
 	std::map<int, std::unique_ptr<ServerSideClient>> clients;
 
 	sockpp::tcp_acceptor acceptor;
-	sockpp::tcp6_acceptor acceptorV6;
 	std::string addr_host;
 	in_port_t addr_port;
 

@@ -4,9 +4,7 @@
 #include <mutex>
 #include "connection.h"
 #include "sockpp/tcp_connector.h"
-#include "sockpp/tcp6_connector.h"
 #include "tcp_socket.h"
-#include "tcp6_socket.h"
 #include "../game_config.h"
 
 using namespace Multiplayer;
@@ -44,15 +42,12 @@ protected:
 	Game_ConfigMultiplayer* cfg;
 
 	sockpp::tcp_connector connector;
-	sockpp::tcp6_connector connectorV6;
 	std::string addr_host;
 	in_port_t addr_port{ 6500 };
 	TCPSocket tcp_socket{ "Client" };
-	TCP6Socket tcp6_socket{ "Client" };
 
 	bool connecting = false;
 	bool connected = false;
-	bool isIPV6 = false;
 
 	std::queue<SystemMessage> m_system_queue;
 	std::queue<std::string> m_data_queue;

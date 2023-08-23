@@ -715,8 +715,8 @@ public:
 		int scale_factor_width = metrics.width/Player::screen_width;
 		int scale_factor_height = metrics.height/Player::screen_height;
 		DisplayUi->SetTextInputRect(
-			(form_rect.x + d_type.GetCaretRelativeOffset()) * scale_factor_width,
-			(form_rect.y + form_rect.height - 6) * scale_factor_height
+			(form_rect.x+d_type.GetCaretRelativeOffset())*scale_factor_width,
+			(form_rect.y+form_rect.height-6)*scale_factor_height
 		);
 	}
 
