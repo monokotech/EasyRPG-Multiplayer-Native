@@ -15,6 +15,9 @@
 #include "../baseui.h"
 #include "../graphics.h"
 #include "../statustext_overlay.h"
+#include "../game_switches.h"
+#include "../game_variables.h"
+#include "../game_map.h"
 #include "game_multiplayer.h"
 #include "server.h"
 #include "strfnd.h"
@@ -871,6 +874,7 @@ std::unique_ptr<DrawableChatUi> chat_box; // chat renderer
 std::vector<std::unique_ptr<ChatEntry>> chat_log;
 std::vector<std::unique_ptr<ChatEntry>> chat_notification_log;
 VisibilityType chat_visibility = Messages::CV_LOCAL;
+bool cheat_flag = false;
 
 void AddLogEntry(
 		std::string a, std::string b, std::string c, std::string d, std::string e,
@@ -1228,6 +1232,32 @@ void InputsTyping() {
 		// command: !immersive
 		} else if (command == "!immersive" || command == "!imm") {
 			chat_box->SetImmersiveMode();
+		// command: !cheat
+		} else if (command == "!cheat") {
+			cheat_flag = !cheat_flag;
+			AddClientInfo("Cheat commands: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
+			if (cheat_flag)
+				AddClientInfo("You can type !cheat to turn it off");
+		// command: !getvar
+		} else if (command == "!getvar" && cheat_flag) {
+			std::string var_id = fnd.next(" ");
+			AddClientInfo("getvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(std::stoi(var_id))));
+		// command: !setvar
+		} else if (command == "!setvar" && cheat_flag) {
+			std::string var_id = fnd.next(" ");
+			Main_Data::game_variables->Set(std::stoi(var_id), std::stoi(fnd.next(" ")));
+			Game_Map::SetNeedRefresh(true);
+			AddClientInfo("setvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(std::stoi(var_id))));
+		// command: !getsw
+		} else if (command == "!getsw" && cheat_flag) {
+			std::string sw_id = fnd.next(" ");
+			AddClientInfo("getsw #" + sw_id + " = " + (Main_Data::game_switches->Get(std::stoi(sw_id)) ? "on" : "off"));
+		// command: !setsw
+		} else if (command == "!setsw" && cheat_flag) {
+			std::string sw_id = fnd.next(" ");
+			Main_Data::game_switches->Set(std::stoi(sw_id), std::stoi(fnd.next(" ")));
+			Game_Map::SetNeedRefresh(true);
+			AddClientInfo("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(std::stoi(sw_id)) ? "on" : "off"));
 		// command: !help
 		} else if (command == "!help") {
 			ShowUsage();
