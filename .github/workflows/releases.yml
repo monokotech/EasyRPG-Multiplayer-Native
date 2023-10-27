@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           aria2c -o tmp.zip \
-            "https://ci.easyrpg.org/view/Toolchains/job/toolchain-windows/lastSuccessfulBuild/artifact/windows/vcpkg/$TOOLCHAIN.zip"
+            "https://github.com/monokotech/EasyRPG-buildscripts/releases/download/20230920/$TOOLCHAIN.zip"
           7z x tmp.zip && mv -v ${{ env.TOOLCHAIN }} vcpkg
 
       - name: Compile
@@ -138,7 +138,7 @@ jobs:
       - name: Setup Toolchain
         run: |
           aria2c -o tmp.tar.gz \
-            "https://ci.easyrpg.org/view/Toolchains/job/toolchain-android/lastSuccessfulBuild/artifact/android_toolchain.tar.gz"
+            "https://github.com/monokotech/EasyRPG-buildscripts/releases/download/20230920/android_toolchain.tar.gz"
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
 
       - name: Decode Base64 Keystore
