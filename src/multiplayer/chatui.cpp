@@ -1241,23 +1241,23 @@ void InputsTyping() {
 		// command: !getvar
 		} else if (command == "!getvar" && cheat_flag) {
 			std::string var_id = fnd.next(" ");
-			AddClientInfo("getvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(std::stoi(var_id))));
+			AddClientInfo("getvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(atoi(var_id.c_str()))));
 		// command: !setvar
 		} else if (command == "!setvar" && cheat_flag) {
 			std::string var_id = fnd.next(" ");
-			Main_Data::game_variables->Set(std::stoi(var_id), std::stoi(fnd.next(" ")));
+			Main_Data::game_variables->Set(atoi(var_id.c_str()), atoi(fnd.next(" ").c_str()));
 			Game_Map::SetNeedRefresh(true);
-			AddClientInfo("setvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(std::stoi(var_id))));
+			AddClientInfo("setvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(atoi(var_id.c_str()))));
 		// command: !getsw
 		} else if (command == "!getsw" && cheat_flag) {
 			std::string sw_id = fnd.next(" ");
-			AddClientInfo("getsw #" + sw_id + " = " + (Main_Data::game_switches->Get(std::stoi(sw_id)) ? "on" : "off"));
+			AddClientInfo("getsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !setsw
 		} else if (command == "!setsw" && cheat_flag) {
 			std::string sw_id = fnd.next(" ");
-			Main_Data::game_switches->Set(std::stoi(sw_id), std::stoi(fnd.next(" ")));
+			Main_Data::game_switches->Set(atoi(sw_id.c_str()), atoi(fnd.next(" ").c_str()));
 			Game_Map::SetNeedRefresh(true);
-			AddClientInfo("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(std::stoi(sw_id)) ? "on" : "off"));
+			AddClientInfo("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !help
 		} else if (command == "!help") {
 			ShowUsage();
