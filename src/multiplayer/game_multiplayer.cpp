@@ -523,6 +523,10 @@ void Game_Multiplayer::SetRemoteAddress(std::string address) {
 	connection.SetAddress(cfg.client_remote_address.Get());
 }
 
+bool Game_Multiplayer::IsActive() {
+	return active;
+}
+
 void Game_Multiplayer::Connect() {
 	if (connection.IsConnected()) return;
 	active = true;

@@ -29,6 +29,7 @@ public:
 	void SetChatName(std::string chat_name);
 	std::string GetChatName();
 	void SetRemoteAddress(std::string address);
+	bool IsActive();
 	void Connect();
 	void Disconnect();
 	void SwitchRoom(int map_id, bool room_switch = false);

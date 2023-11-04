@@ -1592,6 +1592,10 @@ bool Player::IsCP1251() {
 	return (encoding == "ibm-5347_P100-1998" || encoding == "windows-1251" || encoding == "1251");
 }
 
+bool Player::IsMultiplayerActive() {
+	return GMI().IsActive();
+}
+
 int Player::EngineVersion() {
 	if (IsRPG2k3()) return 2003;
 	if (IsRPG2k()) return 2000;

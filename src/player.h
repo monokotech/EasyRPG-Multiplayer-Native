@@ -293,6 +293,11 @@ namespace Player {
 	bool IsPatchKeyPatch();
 
 	/**
+	 * @return True when multiplayer is active
+	 */
+	bool IsMultiplayerActive();
+
+	/**
 	 * @return Running engine version. 2000 for RPG2k and 2003 for RPG2k3
 	 */
 	int EngineVersion();
