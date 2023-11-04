@@ -374,7 +374,6 @@ void Player::Update(bool update_scene) {
 	Audio().Update();
 	Input::Update();
 	GMI().Update();
-	CUI().Update();
 
 	// Game events can query full screen status and change their behavior, so this needs to
 	// be a game key and not a system key.
@@ -402,6 +401,8 @@ void Player::Update(bool update_scene) {
 
 		Scene::instance->Update();
 	}
+
+	CUI().Update();
 
 #ifdef __ANDROID__
 	EpAndroid::invoke();

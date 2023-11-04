@@ -3,6 +3,7 @@
 #include <vector>
 #include "../window_base.h"
 #include "../scene.h"
+#include "../scene_debug.h"
 #include "../bitmap.h"
 #include "../output.h"
 #include "../drawable_mgr.h"
@@ -1079,7 +1080,7 @@ void SetFocus(bool focused) {
 }
 
 void InputsFocusUnfocus() {
-	if(Input::IsTriggered(Input::InputButton::KEY_F10)) {
+	if(Input::IsTriggered(Input::InputButton::KEY_F10) && !Player::debug_flag) {
 		SetFocus(true);
 	} else if(Input::IsExternalTriggered(Input::InputButton::KEY_F10) ||
 			Input::IsExternalTriggered(Input::InputButton::KEY_ESCAPE)) {
@@ -1094,7 +1095,7 @@ void InputsLog() {
 	if(Input::IsExternalPressed(Input::InputButton::KEY_DOWN)) {
 		chat_box->ScrollDown();
 	}
-	if(Input::IsTriggered(Input::InputButton::KEY_F9)) {
+	if(Input::IsTriggered(Input::InputButton::KEY_F9) && !Player::debug_flag) {
 		chat_box->ToggleNotificationLog();
 	}
 }
@@ -1235,9 +1236,21 @@ void InputsTyping() {
 		// command: !cheat
 		} else if (command == "!cheat") {
 			cheat_flag = !cheat_flag;
-			AddClientInfo("Cheat commands: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
+			AddClientInfo("Cheat: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
 			if (cheat_flag)
-				AddClientInfo("You can type !cheat to turn it off");
+				AddClientInfo("You can type !cheat to turn it off.");
+			else if (Player::debug_flag) {
+				if (Scene::Find(Scene::SceneType::Debug) != nullptr)
+					Scene::Pop();
+				Player::debug_flag = false;
+				AddClientInfo("TestPlay mode: disabled");
+			}
+		// command: !debug
+		} else if (command == "!debug" && cheat_flag) {
+			Player::debug_flag = true;
+			AddClientInfo("TestPlay mode: enabled");
+			AddClientInfo("You can focus on the ChatUi by selecting the 'Chat' in the debug menu.");
+			Scene::Push(std::make_shared<Scene_Debug>());
 		// command: !getvar
 		} else if (command == "!getvar" && cheat_flag) {
 			std::string var_id = fnd.next(" ");
@@ -1304,8 +1317,6 @@ void ChatUi::Refresh() {
 
 void ChatUi::Update() {
 	if(chat_box == nullptr) {
-		if (Player::debug_flag)
-			return;
 		for (int e = Scene::SceneType::Title; e < Scene::SceneType::Map; ++e) {
 			if (Scene::Find(static_cast<Scene::SceneType>(e)) != nullptr)
 				Initialize();
@@ -1313,6 +1324,11 @@ void ChatUi::Update() {
 	} else {
 		ProcessInputs();
 	}
+}
+
+void ChatUi::SetFocus(bool focused) {
+	if(chat_box == nullptr) return;
+	::SetFocus(focused);
 }
 
 void ChatUi::GotMessage(int visibility, int room_id,

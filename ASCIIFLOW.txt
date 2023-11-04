@@ -68,3 +68,18 @@ client: received ss(SyncSwitch), wait Player event triggered, send ss
 server: received ss(SyncSwitch), send sv(SyncVariable)
 client: received sv(SyncVariable), wait Player event triggered, send sv
 server: received sv(SyncVariable), tryWritePlayer*
+
+
+Scene:
+
+Update:
+↓ player.cpp: Player::MainLoop: Scene::instance->MainFunction
+↓ scene.cpp: Scene::MainFunction: Player::Update
+↓ player.cpp: Player::Update: Scene::instance->Update
+↓ scene.cpp: Scene::Update: vUpdate
+
+Scene push
+↓ Scene::MainFunction: Player::Update: Scene::Update: vUpdate: Scene::Push
+↓ Scene::MainFunction: init = false
+-- exit --
+↓ Scene::MainFunction: Start()
