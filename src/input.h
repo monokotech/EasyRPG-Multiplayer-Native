@@ -343,6 +343,8 @@ namespace Input {
 
 	bool IsWaitingInput();
 	void WaitInput(bool val);
+
+	bool IsDefaultKeyNotPressed(InputButton button);
 }
 
 #endif

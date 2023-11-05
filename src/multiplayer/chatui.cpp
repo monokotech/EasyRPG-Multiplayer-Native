@@ -1080,9 +1080,11 @@ void SetFocus(bool focused) {
 }
 
 void InputsFocusUnfocus() {
-	if(Input::IsTriggered(Input::InputButton::KEY_F10) && !Player::debug_flag) {
-		SetFocus(true);
-	} else if(Input::IsExternalTriggered(Input::InputButton::KEY_F10) ||
+	if(Input::IsTriggered(Input::InputButton::TOGGLE_CHAT)) {
+		if (!Player::debug_flag || (Player::debug_flag
+				&& Input::IsDefaultKeyNotPressed(Input::InputButton::TOGGLE_CHAT)))
+			SetFocus(true);
+	} else if(Input::IsExternalTriggered(Input::InputButton::TOGGLE_CHAT) ||
 			Input::IsExternalTriggered(Input::InputButton::KEY_ESCAPE)) {
 		SetFocus(false);
 	}
@@ -1095,7 +1097,9 @@ void InputsLog() {
 	if(Input::IsExternalPressed(Input::InputButton::KEY_DOWN)) {
 		chat_box->ScrollDown();
 	}
-	if(Input::IsTriggered(Input::InputButton::KEY_F9) && !Player::debug_flag) {
+	if(Input::IsTriggered(Input::InputButton::TOGGLE_NOTIFICATIONS)) {
+		if (!Player::debug_flag || (Player::debug_flag
+				&& Input::IsDefaultKeyNotPressed(Input::InputButton::TOGGLE_NOTIFICATIONS)))
 		chat_box->ToggleNotificationLog();
 	}
 }

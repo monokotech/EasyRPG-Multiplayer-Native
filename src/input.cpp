@@ -498,3 +498,11 @@ void Input::ResetMask() {
 	SetMask(source->GetMask());
 }
 
+bool Input::IsDefaultKeyNotPressed(InputButton button) {
+	const auto& def_mappings = GetDefaultButtonMappings();
+	for (auto ki = def_mappings.LowerBound(button); ki != def_mappings.end() && ki->first == button; ++ki) {
+		if (GetInputSource()->GetPressedKeys()[ki->second])
+			return false;
+	}
+	return true;
+}

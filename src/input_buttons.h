@@ -85,8 +85,11 @@ namespace Input {
 		FAST_FORWARD_PLUS,
 		TOGGLE_FULLSCREEN,
 		TOGGLE_ZOOM,
-		// extra keys!
+
 		TOGGLE_MUTE,
+		TOGGLE_NOTIFICATIONS,
+		TOGGLE_CHAT,
+
 		KEY_UP,
 		KEY_DOWN,
 		KEY_LEFT,
@@ -98,8 +101,7 @@ namespace Input {
 		KEY_V,
 		KEY_CTRL,
 		KEY_ESCAPE,
-		KEY_F9,
-		KEY_F10,
+
 		BUTTON_COUNT
 	};
 
@@ -146,8 +148,11 @@ namespace Input {
 		"FAST_FORWARD_PLUS",
 		"TOGGLE_FULLSCREEN",
 		"TOGGLE_ZOOM",
-		// extra keys!
+
 		"TOGGLE_MUTE",
+		"TOGGLE_NOTIFICATIONS",
+		"TOGGLE_CHAT",
+
 		"KEY_UP",
 		"KEY_DOWN",
 		"KEY_LEFT",
@@ -159,8 +164,7 @@ namespace Input {
 		"KEY_V",
 		"KEY_CTRL",
 		"KEY_ESCAPE",
-		"KEY_F9",
-		"KEY_F10",
+
 		"BUTTON_COUNT");
 
 	constexpr auto kButtonHelp = lcf::makeEnumTags<InputButton>(
@@ -197,8 +201,6 @@ namespace Input {
 		"Reset to the title screen",
 		"Move up one page in menus",
 		"Move down one page in menus",
-		"Page up key",
-		"Page down key",
 		"Left mouse key",
 		"Right mouse key",
 		"Middle mouse key",
@@ -208,23 +210,24 @@ namespace Input {
 		"Fast forward the game even more (x10)",
 		"Toggle Fullscreen mode",
 		"Toggle Window Zoom level",
-		"Total Button Count",
-		// extra keys!
-		"TOGGLE_MUTE",
-		"KEY_UP",
-		"KEY_DOWN",
-		"KEY_LEFT",
-		"KEY_RIGHT",
-		"KEY_BACKSPACE",
-		"KEY_RETURN",
-		"KEY_TAB",
-		"KEY_C",
-		"KEY_V",
-		"KEY_CTRL",
-		"KEY_ESCAPE",
-		"KEY_F9",
-		"KEY_F10",
-		"BUTTON_COUNT");
+
+		"Toggle mute",
+		"Toggle notifications",
+		"Toggle ChatUi",
+
+		"Up Key",
+		"Down Key",
+		"Left Key",
+		"Right Key",
+		"Backspace Key",
+		"Return Key",
+		"Tab Key",
+		"C Key",
+		"V Key",
+		"Ctrl Key",
+		"Escape Key",
+
+		"Total Button Count");
 
 	/**
 	 * Return true if the given button is a system button.
