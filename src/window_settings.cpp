@@ -403,7 +403,7 @@ void Window_Settings::RefreshButtonList() {
 			break;
 		case 1:
 			buttons = {Input::SETTINGS_MENU, Input::TOGGLE_FPS, Input::TOGGLE_FULLSCREEN, Input::TOGGLE_ZOOM,
-				Input::TOGGLE_NOTIFICATIONS, Input::TOGGLE_CHAT,
+				Input::TOGGLE_MUTE, Input::TOGGLE_NOTIFICATIONS, Input::TOGGLE_CHAT,
 				Input::TAKE_SCREENSHOT, Input::RESET, Input::FAST_FORWARD, Input::FAST_FORWARD_PLUS,
 				Input::PAGE_UP, Input::PAGE_DOWN };
 			break;

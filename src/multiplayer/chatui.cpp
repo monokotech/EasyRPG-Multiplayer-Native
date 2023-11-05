@@ -1074,15 +1074,32 @@ void Initialize() {
 	SetChatVisibility(GMI().GetConfig().client_chat_visibility.Get());
 }
 
+void ToggleCheat() {
+	cheat_flag = !cheat_flag;
+	AddClientInfo("Cheat: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
+	if (cheat_flag)
+		AddClientInfo("You can type !cheat to turn it off.");
+	else if (Player::debug_flag) {
+		if (Scene::Find(Scene::SceneType::Debug) != nullptr)
+			Scene::Pop();
+		Player::debug_flag = false;
+		AddClientInfo("TestPlay mode: disabled");
+	}
+}
+
 void SetFocus(bool focused) {
 	Input::SetGameFocus(!focused);
 	chat_box->SetFocus(focused);
+	if (focused && Player::debug_flag && !cheat_flag) {
+		ToggleCheat();
+		Output::Warning("Chat: [TestPlay] The cheat mode is being toggled");
+	}
 }
 
 void InputsFocusUnfocus() {
 	if(Input::IsTriggered(Input::InputButton::TOGGLE_CHAT)) {
 		if (!Player::debug_flag || (Player::debug_flag
-				&& Input::IsDefaultKeyNotPressed(Input::InputButton::TOGGLE_CHAT)))
+				&& Input::IsKeyNotShared(Input::InputButton::TOGGLE_CHAT)))
 			SetFocus(true);
 	} else if(Input::IsExternalTriggered(Input::InputButton::TOGGLE_CHAT) ||
 			Input::IsExternalTriggered(Input::InputButton::KEY_ESCAPE)) {
@@ -1099,7 +1116,7 @@ void InputsLog() {
 	}
 	if(Input::IsTriggered(Input::InputButton::TOGGLE_NOTIFICATIONS)) {
 		if (!Player::debug_flag || (Player::debug_flag
-				&& Input::IsDefaultKeyNotPressed(Input::InputButton::TOGGLE_NOTIFICATIONS)))
+				&& Input::IsKeyNotShared(Input::InputButton::TOGGLE_NOTIFICATIONS)))
 		chat_box->ToggleNotificationLog();
 	}
 }
@@ -1239,16 +1256,7 @@ void InputsTyping() {
 			chat_box->SetImmersiveMode();
 		// command: !cheat
 		} else if (command == "!cheat") {
-			cheat_flag = !cheat_flag;
-			AddClientInfo("Cheat: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
-			if (cheat_flag)
-				AddClientInfo("You can type !cheat to turn it off.");
-			else if (Player::debug_flag) {
-				if (Scene::Find(Scene::SceneType::Debug) != nullptr)
-					Scene::Pop();
-				Player::debug_flag = false;
-				AddClientInfo("TestPlay mode: disabled");
-			}
+			ToggleCheat();
 		// command: !debug
 		} else if (command == "!debug" && cheat_flag) {
 			Player::debug_flag = true;

@@ -498,11 +498,15 @@ void Input::ResetMask() {
 	SetMask(source->GetMask());
 }
 
-bool Input::IsDefaultKeyNotPressed(InputButton button) {
-	const auto& def_mappings = GetDefaultButtonMappings();
-	for (auto ki = def_mappings.LowerBound(button); ki != def_mappings.end() && ki->first == button; ++ki) {
-		if (GetInputSource()->GetPressedKeys()[ki->second])
-			return false;
+bool Input::IsKeyNotShared(InputButton button) {
+	const auto& raw_pressed_now = source->GetPressedKeys();
+	const auto& mappings = GetInputSource()->GetButtonMappings();
+	for (auto ki = mappings.begin(); ki != mappings.end(); ++ki) {
+		for (auto bi = mappings.LowerBound(button); bi != mappings.end() && bi->first == button; ++bi) {
+			if (ki->first == bi->first) break;
+			if (bi->second == ki->second && raw_pressed_now[bi->second])
+				return false;
+		}
 	}
 	return true;
 }
