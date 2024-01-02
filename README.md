@@ -1,5 +1,7 @@
 # EasyRPG Multiplayer Native
 
+[![Discord](https://img.shields.io/discord/1190331444380307496?color=blue&labelColor=555555&label=&logo=discord&style=for-the-badge)](https://discord.gg/RbCsGgAXnt "Discord")
+
 [简体中文](docs/README-ZH.md)
 
 English is not my native language. Please correct me.
@@ -10,7 +12,7 @@ This project incorporated multiplayer client code from another project in the fo
 
 You might ask what is the server based on. It reuses the client code, the server is like a mirror of the client (in terms of code). The C2S and S2C namespaces are removed, the two types of the packet are merged into one, making them bidirectional. As a result, the readability of messages.h has improved a lot. In the future, we might try to use binary data structures to refactor the packet classes again, to resolve the issue of not being able to include specific delimiters in the data.
 
-If you are interested in this project, you can clone the repository to your local to browse the code. If you don't know how to use Git, please refer to: [Git Manual](https://git-scm.com/book/en/v2)
+If you are interested in this project, you can clone the repository to your local system to browse the code. If you don't know how to use Git, please refer to: [Git Manual](https://git-scm.com/book/en/v2)
 
 Remember to switch to the master\_tmp branch, as many updates will be submitted there first.
 
