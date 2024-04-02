@@ -1,3 +1,7 @@
+# Settings (See .../settings/secrets/actions)
+# +- secrets: APK_KEY_ALIAS, APK_KEY_PASSWORD, APK_STORE_FILE_B64
+# +- variables: TOOLCHAIN_RELEASE_NAME
+
 name: Releases
 
 on:
@@ -23,7 +27,7 @@ jobs:
           - ubuntu:22.04
 
     env:
-      FILENAME: "Linux-Server-Build-${{ matrix.image }}-${{ github.ref_name }}"
+      FILENAME: "Linux-Server-build-${{ matrix.image }}-${{ github.ref_name }}"
 
     steps:
       - name: Install dependencies
@@ -68,9 +72,17 @@ jobs:
     name: windows
     runs-on: windows-latest
 
+    strategy:
+      matrix:
+        arch: [Win32, x64]
+        include:
+          - arch: Win32
+            triplet: x86-windows-static
+          - arch: x64
+            triplet: x64-windows-static
+
     env:
-      FILENAME: "Windows-Build-${{ github.ref_name }}"
-      TOOLCHAIN: "vcpkg-export-20230429-132534"
+      FILENAME: "Windows-build-${{ matrix.arch }}-${{ github.ref_name }}"
 
     steps:
       - name: Setup Developer Command Prompt
@@ -84,14 +96,14 @@ jobs:
         shell: bash
         run: |
           aria2c -o tmp.zip \
-            "https://github.com/monokotech/EasyRPG-buildscripts/releases/download/20230920/$TOOLCHAIN.zip"
-          7z x tmp.zip && mv -v ${{ env.TOOLCHAIN }} vcpkg
+            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/vcpkg-export.zip"
+          7z x tmp.zip && mv -v vcpkg-export* vcpkg
 
       - name: Compile
         shell: cmd
         run: |
-          cmake . -A x64 -B build ^
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static ^
+          cmake . -A ${{ matrix.arch }} -B build ^
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} ^
             -DCMAKE_TOOLCHAIN_FILE=.\vcpkg\scripts\buildsystems\vcpkg.cmake ^
             -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
             -DPLAYER_BUILD_LIBS=on
@@ -122,7 +134,7 @@ jobs:
           - arm64-v8a
 
     env:
-      FILENAME: "Android-Build-${{ matrix.abi }}-${{ github.ref_name }}"
+      FILENAME: "Android-build-${{ matrix.abi }}-${{ github.ref_name }}"
 
     steps:
       - name: Setup JDK
@@ -138,7 +150,7 @@ jobs:
       - name: Setup Toolchain
         run: |
           aria2c -o tmp.tar.gz \
-            "https://github.com/monokotech/EasyRPG-buildscripts/releases/download/20230920/android_toolchain.tar.gz"
+            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/android_toolchain.tar.gz"
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
 
       - name: Decode Base64 Keystore
@@ -182,7 +194,7 @@ jobs:
           - arm64
 
     env:
-      FILENAME: "MacOS-Build-${{ matrix.arch }}-${{ github.ref_name }}"
+      FILENAME: "macOS-build-${{ matrix.arch }}-${{ github.ref_name }}"
 
     steps:
       - name: Clone Repository
@@ -192,7 +204,7 @@ jobs:
       - name: Setup Toolchain
         run: |
           aria2c -o tmp.tar.gz \
-            "https://github.com/monokotech/EasyRPG-buildscripts/releases/download/20230920/macos_toolchain.tar.gz"
+            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/macos_toolchain.tar.gz"
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
           # fix: Imported target ... includes non-existent path
           # grep: -I is to exclude binary files
