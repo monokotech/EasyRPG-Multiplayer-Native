@@ -726,7 +726,6 @@ elseif(${PLAYER_TARGET_PLATFORM} STREQUAL "amigaos4")
 		src/platform/sdl/axis.h
 		src/platform/sdl/sdl_ui.cpp
 		src/platform/sdl/sdl_ui.h)
-	message(FATAL_ERROR "Invalid target platform")
 endif()
 
 # Shared by homebrew platforms
