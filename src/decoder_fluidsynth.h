@@ -45,6 +45,7 @@ public:
 	~FluidSynthDecoder() override;
 
 	static bool Initialize(std::string& error_message);
+	static void ResetState();
 
 	/**
 	 * Sets the name of the preferred soundfont.
@@ -67,6 +68,8 @@ public:
 		return "FluidLite";
 #endif
 	};
+
+	bool NeedsSoftReset() override;
 
 private:
 #if defined(HAVE_FLUIDSYNTH) || defined(HAVE_FLUIDLITE)

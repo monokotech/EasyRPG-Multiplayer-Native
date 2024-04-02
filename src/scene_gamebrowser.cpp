@@ -21,11 +21,13 @@
 #include <memory>
 #include "options.h"
 #include "scene_settings.h"
+#include "audio_midi.h"
 #include "audio_secache.h"
 #include "cache.h"
 #include "game_system.h"
 #include "input.h"
 #include "player.h"
+#include "scene_logo.h"
 #include "scene_title.h"
 #include "bitmap.h"
 #include "audio.h"
@@ -49,6 +51,7 @@ void Scene_GameBrowser::Continue(SceneType /* prev_scene */) {
 
 	Cache::ClearAll();
 	AudioSeCache::Clear();
+	MidiDecoder::Reset();
 	lcf::Data::Clear();
 	Main_Data::Cleanup();
 
@@ -196,7 +199,7 @@ void Scene_GameBrowser::BootGame() {
 		return;
 	}
 
-	if (!FileFinder::IsValidProject(fs)) {
+	if (!FileFinder::IsValidProject(fs) && !FileFinder::OpenViewToEasyRpgFile(fs)) {
 		// Not a game: Open as directory
 		load_window->SetVisible(false);
 		game_loading = false;
@@ -213,11 +216,18 @@ void Scene_GameBrowser::BootGame() {
 	FileFinder::SetGameFilesystem(fs);
 	Player::CreateGameObjects();
 
+	game_loading = false;
+	load_window->SetVisible(false);
+
+	auto logos = Scene_Logo::LoadLogos();
+	if (!logos.empty()) {
+		// Delegate to Scene_Logo when a startup graphic was found
+		Scene::Push(std::make_shared<Scene_Logo>(std::move(logos), 1));
+		return;
+	}
+
 	if (!Player::startup_language.empty()) {
 		Player::translation.SelectLanguage(Player::startup_language);
 	}
 	Scene::Push(std::make_shared<Scene_Title>());
-
-	game_loading = false;
-	load_window->SetVisible(false);
 }

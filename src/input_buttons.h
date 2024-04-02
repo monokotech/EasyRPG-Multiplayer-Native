@@ -81,8 +81,8 @@ namespace Input {
 		MOUSE_MIDDLE,
 		SCROLL_UP,
 		SCROLL_DOWN,
-		FAST_FORWARD,
-		FAST_FORWARD_PLUS,
+		FAST_FORWARD_A,
+		FAST_FORWARD_B,
 		TOGGLE_FULLSCREEN,
 		TOGGLE_ZOOM,
 
@@ -105,7 +105,7 @@ namespace Input {
 		BUTTON_COUNT
 	};
 
-	constexpr auto kButtonNames = lcf::makeEnumTags<InputButton>(
+	constexpr auto kInputButtonNames = lcf::makeEnumTags<InputButton>(
 		"UP",
 		"DOWN",
 		"LEFT",
@@ -144,8 +144,8 @@ namespace Input {
 		"MOUSE_MIDDLE",
 		"SCROLL_UP",
 		"SCROLL_DOWN",
-		"FAST_FORWARD",
-		"FAST_FORWARD_PLUS",
+		"FAST_FORWARD_A",
+		"FAST_FORWARD_B",
 		"TOGGLE_FULLSCREEN",
 		"TOGGLE_ZOOM",
 
@@ -167,7 +167,7 @@ namespace Input {
 
 		"BUTTON_COUNT");
 
-	constexpr auto kButtonHelp = lcf::makeEnumTags<InputButton>(
+	constexpr auto kInputButtonHelp = lcf::makeEnumTags<InputButton>(
 		"Up Direction",
 		"Down Direction",
 		"Left Direction",
@@ -206,8 +206,8 @@ namespace Input {
 		"Middle mouse key",
 		"Scroll up key",
 		"Scroll down key",
-		"Fast forward the game (x3)",
-		"Fast forward the game even more (x10)",
+		"Run the game at x{} speed",
+		"Run the game at x{} speed",
 		"Toggle Fullscreen mode",
 		"Toggle Window Zoom level",
 
@@ -241,8 +241,8 @@ namespace Input {
 			case SHOW_LOG:
 			case TOGGLE_ZOOM:
 			case TOGGLE_MUTE:
-			case FAST_FORWARD:
-			case FAST_FORWARD_PLUS:
+			case FAST_FORWARD_A:
+			case FAST_FORWARD_B:
 				return true;
 			default:
 				return false;
@@ -283,7 +283,7 @@ namespace Input {
 			NUM_DIRECTIONS = 10,
 		};
 
-		static constexpr auto kNames = lcf::makeEnumTags<InputDirection>(
+		static constexpr auto kInputDirectionNames = lcf::makeEnumTags<InputDirection>(
 			"NONE",
 			"DOWNLEFT",
 			"DOWN",
@@ -303,7 +303,7 @@ namespace Input {
 	using ButtonMapping = ButtonMappingArray::pair_type;
 
 	inline std::ostream& operator<<(std::ostream& os, ButtonMapping bm) {
-		os << "{ " << kButtonNames.tag(bm.first) << ", " << Keys::kNames.tag(bm.second) << " }";
+		os << "{ " << kInputButtonNames.tag(bm.first) << ", " << Keys::kInputKeyNames.tag(bm.second) << " }";
 		return os;
 	}
 
@@ -313,7 +313,7 @@ namespace Input {
 	using DirectionMapping = DirectionMappingArray::pair_type;
 
 	inline std::ostream& operator<<(std::ostream& os, DirectionMapping dm) {
-		os << "{ " << Direction::kNames.tag(dm.first) << ", " << kButtonNames.tag(dm.second) << " }";
+		os << "{ " << Direction::kInputDirectionNames.tag(dm.first) << ", " << kInputButtonNames.tag(dm.second) << " }";
 		return os;
 	}
 

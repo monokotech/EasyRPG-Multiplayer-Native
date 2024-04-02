@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <unordered_set>
 #include "system.h"
 #include "game_commonevent.h"
 #include "game_event.h"
@@ -91,7 +92,7 @@ namespace Game_Map {
 	 */
 	void Quit();
 
-	/** Disposes Game_Map.  */
+	/** Disposes Game_Map. */
 	void Dispose();
 
 	/**
@@ -197,6 +198,60 @@ namespace Game_Map {
 	bool MakeWay(const Game_Character& self,
 			int from_x, int from_y,
 			int to_x, int to_y);
+
+	/**
+	 * Check if a move of self is possible to (to_x,to_y).
+	 * Any events that are blocked will also be checked for collision.
+	 *
+	 * Returns true if move is possible.
+	 *
+	 * @param self Character to move.
+	 * @param from_x from tile x.
+	 * @param from_y from tile y.
+	 * @param to_x to new tile x.
+	 * @param to_y to new tile y.
+	 * @param check_events_and_events (Optional) Whether to check
+	 * events, or only consider map collision.
+	 * @param ignore_some_events_by_id (Optional) A set of
+	 * specific event IDs to ignore.
+	 * @return whether move is possible.
+	 */
+	bool CheckWay(const Game_Character& self,
+			int from_x, int from_y,
+			int to_x, int to_y,
+			bool check_events_and_vehicles,
+			std::unordered_set<int> *ignore_some_events_by_id);
+
+	/** Shorter version of CheckWay. */
+	bool CheckWay(const Game_Character& self,
+			int from_x, int from_y,
+			int to_x, int to_y);
+
+	/**
+	 * Extended function behind MakeWay and CheckWay
+	 * that allows controlling exactly which events are
+	 * ignored in the collision, and whether events should
+	 * be prompted to make way with side effects (for MakeWay)
+	 * or not (for CheckWay).
+	 *
+	 * @param self See CheckWay or MakeWay.
+	 * @param from_x See CheckWay or MakeWay.
+	 * @param from_y See CheckWay or MakeWay.
+	 * @param to_x See CheckWay or MakeWay.
+	 * @param to_y See CheckWay or MakeWay.
+	 * @param check_events_and_vehicles whether to check
+	 * events, or only consider map collision.
+	 * @param make_way Whether to cause side effects.
+	 * @param ignore_some_events_by_id A set of
+	 * specific event IDs to ignore.
+	 * @return See CheckWay or MakeWay.
+	 */
+	 bool CheckOrMakeWayEx(const Game_Character& self,
+			int from_x, int from_y,
+			int to_x, int to_y,
+			bool check_events_and_vehicles,
+			std::unordered_set<int> *ignore_some_events_by_id,
+			bool make_way);
 
 	/**
 	 * Gets if possible to land the airship at (x,y)
@@ -569,8 +624,14 @@ namespace Game_Map {
 	 * @param bit which direction bits to check
 	 * @param x target tile x.
 	 * @param y target tile y.
+	 * @param check_events_and_vehicles Whether to consider events and vehicles.
+	 * @param check_map_geometry Whether to take map collision into account.
 	 * @return whether is passable.
 	 */
+	bool IsPassableTile(
+		const Game_Character* self, int bit, int x, int y,
+		bool check_events_and_vehicles, bool check_map_geometry
+		);
 	bool IsPassableTile(const Game_Character* self, int bit, int x, int y);
 
 	/**

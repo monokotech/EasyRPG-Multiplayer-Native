@@ -78,6 +78,13 @@ void Scene_Settings::CreateMainWindow() {
 	main_window->SetHeight(176);
 	main_window->SetY((Player::screen_height - main_window->GetHeight()) / 2);
 	main_window->SetX((Player::screen_width - main_window->GetWidth()) / 2);
+
+	if (Player::no_audio_flag) {
+		main_window->SetItemEnabled(1, !Player::no_audio_flag);
+	}
+#ifndef SUPPORT_AUDIO
+	main_window->DisableItem(1);
+#endif
 }
 
 void Scene_Settings::CreateOptionsWindow() {
@@ -288,6 +295,13 @@ void Scene_Settings::UpdateMain() {
 	if (Input::IsTriggered(Input::DECISION)) {
 		Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Game_System::SFX_Decision));
 		auto idx = main_window->GetIndex();
+
+		if (main_window->IsItemEnabled(idx)) {
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Game_System::SFX_Decision));
+		} else {
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Game_System::SFX_Buzzer));
+			return;
+		}
 
 		if (modes[idx] == Window_Settings::eSave) {
 			SaveConfig();
@@ -516,7 +530,7 @@ bool Scene_Settings::RefreshInputEmergencyReset() {
 				}
 				Input::ResetAllMappings();
 			} else {
-				Output::Info("Button {} reset to default", Input::kButtonNames.tag(input_window->GetInputButton()));
+				Output::Info("Button {} reset to default", Input::kInputButtonNames.tag(input_window->GetInputButton()));
 				Output::Info("To reset all buttons hold 3 seconds longer");
 				if (input_window->GetActive()) {
 					input_window->SetIndex(0);
@@ -561,20 +575,14 @@ bool Scene_Settings::SaveConfig(bool silent) {
 
 	Game_Config cfg;
 	cfg.video = DisplayUi->GetConfig();
-	cfg.audio = DisplayUi->GetAudio().GetConfig();
+	cfg.audio = Audio().GetConfig();
 	cfg.input = Input::GetInputSource()->GetConfig();
 	cfg.player = Player::player_config;
 	cfg.multiplayer = GMI().GetConfig();
 
 	cfg.WriteToStream(cfg_out);
 
-#ifdef EMSCRIPTEN
-	// Save changed file system
-	EM_ASM({
-		FS.syncfs(function(err) {
-		});
-	});
-#endif
+	AsyncHandler::SaveFilesystem();
 
 	if (silent) {
 		Output::Debug("Configuration saved to {}", cfg_out.GetName());

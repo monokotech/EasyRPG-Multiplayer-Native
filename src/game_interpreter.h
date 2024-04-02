@@ -64,7 +64,7 @@ public:
 	void Update(bool reset_loop_count=true);
 
 	void Push(
-			const std::vector<lcf::rpg::EventCommand>& _list,
+			std::vector<lcf::rpg::EventCommand> _list,
 			int _event_id,
 			bool started_by_decision_key = false
 	);
@@ -75,7 +75,8 @@ public:
 	void InputButton();
 	void SetupChoices(const std::vector<std::string>& choices, int indent, PendingMessage& pm);
 
-	virtual bool ExecuteCommand();
+	bool ExecuteCommand();
+	virtual bool ExecuteCommand(lcf::rpg::EventCommand const& com);
 
 
 	/**
@@ -169,6 +170,10 @@ protected:
 	static std::vector<Game_Actor*> GetActors(int mode, int id);
 	static int ValueOrVariable(int mode, int val);
 	static int ValueOrVariableBitfield(int mode, int shift, int val);
+	// Range checked, conditional version (slower) of ValueOrVariableBitfield
+	static int ValueOrVariableBitfield(lcf::rpg::EventCommand const& com, int mode_idx, int shift, int val_idx);
+	static StringView CommandStringOrVariable(lcf::rpg::EventCommand const& com, int mode_idx, int val_idx);
+	static StringView CommandStringOrVariableBitfield(lcf::rpg::EventCommand const& com, int mode_idx, int shift, int val_idx);
 
 	/**
 	 * When current frame finishes executing we pop the stack
@@ -282,6 +287,7 @@ protected:
 	bool CommandManiacControlGlobalSave(lcf::rpg::EventCommand const& com);
 	bool CommandManiacChangePictureId(lcf::rpg::EventCommand const& com);
 	bool CommandManiacSetGameOption(lcf::rpg::EventCommand const& com);
+	bool CommandManiacControlStrings(lcf::rpg::EventCommand const& com);
 	bool CommandManiacCallCommand(lcf::rpg::EventCommand const& com);
 
 	int DecodeInt(lcf::DBArray<int32_t>::const_iterator& it);
@@ -329,6 +335,7 @@ protected:
 
 	bool CheckOperator(int val, int val2, int op) const;
 	bool ManiacCheckContinueLoop(int val, int val2, int type, int op) const;
+	int ManiacBitmask(int value, int mask) const;
 
 	lcf::rpg::SaveEventExecState _state;
 	KeyInputState _keyinput;

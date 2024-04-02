@@ -15,17 +15,22 @@
  * along with EasyRPG Player. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef EP_PLATFORM_WII_MAIN_H
-#define EP_PLATFORM_WII_MAIN_H
+#ifndef EP_DYNRPG_TEXTPLUGIN_H
+#define EP_DYNRPG_TEXTPLUGIN_H
 
-namespace Wii {
-	/**
-	 * Helper function to disable the console on Wii
-	 * and redirect to USB Gekko, if present.
-	 */
-	void SetConsole();
+#include "dynrpg.h"
 
-	bool LogMessage(const std::string &message);
-};
+namespace DynRpg {
+	class TextPlugin : public DynRpgPlugin {
+	public:
+		TextPlugin() : DynRpgPlugin("DynTextPlugin") {}
+		~TextPlugin();
+
+		void RegisterFunctions() override;
+		void Update() override;
+		void Load(const std::vector<uint8_t>&) override;
+		std::vector<uint8_t> Save() override;
+	};
+}
 
 #endif

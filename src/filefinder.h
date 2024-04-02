@@ -98,6 +98,23 @@ namespace FileFinder {
 	std::string FindSound(StringView name);
 
 	/**
+	 * Finds a font file.
+	 * Searches through the current RPG Maker game and the RTP directories.
+	 *
+	 * @param name the font name.
+	 * @return path to file.
+	 */
+	std::string FindFont(StringView name);
+
+	/**
+	 * Finds a text file in the current RPG Maker game.
+	 *
+	 * @param name the text path and name.
+	 * @return path to file.
+	 */
+	std::string FindText(StringView name);
+
+	/**
 	 * Finds an image file and opens a file handle to it.
 	 * Searches through the current RPG Maker game and the RTP directories.
 	 *
@@ -137,13 +154,24 @@ namespace FileFinder {
 	Filesystem_Stream::InputStream OpenFont(StringView name);
 
 	/**
-	 * Finds a font file.
-	 * Searches through the current RPG Maker game and the RTP directories.
+	 * Finds a text file and opens a file handle to it.
+	 * Searches through the Text folder of the current RPG Maker game.
+	 * Will also search through the directory save files are written to as a fallback,
+	 * as it needs to account for files written by the game as well.
 	 *
-	 * @param name the font name.
-	 * @return path to file.
+	 * @param name the text path and name.
+	 * @return read handle on success or invalid handle if not found
 	 */
-	std::string FindFont(StringView name);
+	Filesystem_Stream::InputStream OpenText(StringView name);
+
+	/**
+	* Writes data to a txt file.
+	* If the file exists, it will be overwritten.
+	*
+	* @param name the text file path and name
+	* @param data the content of the text file to be written
+	*/
+	void WriteText(StringView name, StringView data);
 
 	/**
 	 * Appends name to directory.
@@ -217,19 +245,27 @@ namespace FileFinder {
 	std::string GetPathInsideGamePath(StringView path_in);
 
 	/**
-	 * @param p tree Tree to check
+	 * Checks whether a passed path ends with a supported extension for an archive, e.g. ".zip"
+	 *
+	 * @param path path to check
+	 * @return true when the path ends on an archive extension
+	 */
+	bool IsSupportedArchiveExtension(std::string path);
+
+	/**
+	 * @param p fs Tree to check
 	 * @return Whether the tree contains a valid RPG2k(3) or EasyRPG project
 	 */
 	bool IsValidProject(const FilesystemView& fs);
 
 	/**
-	 * @param p tree Tree to check
+	 * @param p fs Tree to check
 	 * @return Whether the tree contains a valid RPG2k(3) project
 	 */
 	bool IsRPG2kProject(const FilesystemView& fs);
 
 	/**
-	 * @param p tree Tree to check
+	 * @param p fs Tree to check
 	 * @return Whether the tree contains a valid EasyRPG project
 	 */
 	bool IsEasyRpgProject(const FilesystemView& fs);
@@ -238,10 +274,19 @@ namespace FileFinder {
 	 * Determines if the directory in question represents an RPG2k project with non-standard
 	 *   database, map tree, or map file names.
 	 *
-	 * @param tree The directory tree in question
+	 * @param fs The directory tree in question
 	 * @return true if this is likely an RPG2k project; false otherwise
 	 */
 	bool IsRPG2kProjectWithRenames(const FilesystemView& fs);
+
+	/**
+	 * Determines if the directory contains a single file/directory ending in ".easyrpg" for use in the
+	 * autostart feature.
+	 *
+	 * @param fs The directory tree to check. Is replaced with a view to the game for autorun.
+	 * @return true when autorun is possible, fs contains the new view; when false fs is not modified
+	 */
+	bool OpenViewToEasyRpgFile(FilesystemView& fs);
 
 	/**
 	 * Checks whether the save directory contains any savegame with name

@@ -57,6 +57,7 @@
 #include "game_system.h"
 #include "multiplayer/game_multiplayer.h"
 #include "game_variables.h"
+#include "game_strings.h"
 #include "game_targets.h"
 #include "game_windows.h"
 #include "graphics.h"
@@ -140,8 +141,8 @@ namespace Player {
 	bool toggle_mute_flag = false;
 	int volume_se = 0;
 	int volume_bgm = 0;
-	int speed_modifier = 3;
-	int speed_modifier_plus = 10;
+	int speed_modifier_a;
+	int speed_modifier_b;
 	int rng_seed = -1;
 	Game_ConfigPlayer player_config;
 	Game_ConfigGame game_config;
@@ -214,6 +215,8 @@ void Player::Init(std::vector<std::string> args) {
 	Input::AddRecordingData(Input::RecordingData::CommandLine, command_line);
 
 	player_config = std::move(cfg.player);
+	speed_modifier_a = cfg.input.speed_modifier_a.Get();
+	speed_modifier_b = cfg.input.speed_modifier_b.Get();
 }
 
 void Player::Run() {
@@ -229,6 +232,7 @@ void Player::Run() {
 	}
 
 	Instrumentation::Init("EasyRPG-Player");
+
 	Scene::Push(std::make_shared<Scene_Logo>());
 	Graphics::UpdateSceneCallback();
 
@@ -237,8 +241,10 @@ void Player::Run() {
 	Game_Clock::ResetFrame(Game_Clock::now());
 
 	// Main loop
+#if defined(USE_LIBRETRO) || defined(EMSCRIPTEN)
+	// emscripten implemented in main.cpp
 	// libretro invokes the MainLoop through a retro_run-callback
-#ifndef USE_LIBRETRO
+#else
 	while (Transition::instance().IsActive() || (Scene::instance && Scene::instance->type != Scene::Null)) {
 		MainLoop();
 	}
@@ -283,9 +289,6 @@ void Player::MainLoop() {
 
 	auto frame_limit = DisplayUi->GetFrameLimit();
 	if (frame_limit == Game_Clock::duration()) {
-#ifdef EMSCRIPTEN
-		emscripten_sleep(0);
-#endif
 		return;
 	}
 
@@ -295,11 +298,6 @@ void Player::MainLoop() {
 	if (Game_Clock::now() < next) {
 		iframe.End();
 		Game_Clock::SleepFor(next - now);
-	} else {
-#ifdef EMSCRIPTEN
-		// Yield back to browser once per frame
-		emscripten_sleep(0);
-#endif
 	}
 }
 
@@ -335,11 +333,11 @@ void Player::UpdateInput() {
 		Audio().ToggleMute();
 	}
 	float speed = 1.0;
-	if (Input::IsSystemPressed(Input::FAST_FORWARD)) {
-		speed = speed_modifier;
+	if (Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
+		speed = speed_modifier_a;
 	}
-	if (Input::IsSystemPressed(Input::FAST_FORWARD_PLUS)) {
-		speed = speed_modifier_plus;
+	if (Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
+		speed = speed_modifier_b;
 	}
 	Game_Clock::SetGameSpeedFactor(speed);
 
@@ -810,9 +808,6 @@ void Player::CreateGameObjects() {
 	if (exeis) {
 		exe_reader.reset(new EXEReader(std::move(exeis)));
 		Cache::exfont_custom = exe_reader->GetExFont();
-		if (!Cache::exfont_custom.empty()) {
-			Output::Debug("ExFont loaded from RPG_RT");
-		}
 
 		if (engine == EngineNone) {
 			auto version_info = exe_reader->GetFileInfo();
@@ -945,6 +940,8 @@ void Player::ResetGameObjects() {
 	}
 	Main_Data::game_variables = std::make_unique<Game_Variables>(min_var, max_var);
 	Main_Data::game_variables->SetLowerLimit(lcf::Data::variables.size());
+
+	Main_Data::game_strings = std::make_unique<Game_Strings>();
 
 	// Prevent a crash when Game_Map wants to reset the screen content
 	// because Setup() modified pictures array
@@ -1215,6 +1212,7 @@ void Player::LoadSavegame(const std::string& save_name, int save_id) {
 	Main_Data::game_switches->SetData(std::move(save->system.switches));
 	Main_Data::game_variables->SetLowerLimit(lcf::Data::variables.size());
 	Main_Data::game_variables->SetData(std::move(save->system.variables));
+	Main_Data::game_strings->SetData(std::move(save->system.maniac_strings));
 	Main_Data::game_system->SetupFromSave(std::move(save->system));
 	Main_Data::game_actors->SetSaveData(std::move(save->actors));
 	Main_Data::game_party->SetupFromSave(std::move(save->inventory));
@@ -1570,7 +1568,7 @@ bool Player::IsBig5() {
 		return Tr::GetCurrentLanguageCode() == "zh_TW";
 	}
 
-	return (encoding == "Big5" || encoding == "950");
+	return (encoding == "Big5" || encoding == "windows-950" || encoding == "950");
 }
 
 bool Player::IsCP936() {

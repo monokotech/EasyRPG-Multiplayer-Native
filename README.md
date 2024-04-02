@@ -242,24 +242,27 @@ Yes, you can press the M key to toggle mute on and off.
 - [liblcf] for RPG Maker data reading.
 - [sock++] for multiplayer.
 - [crypto++] for multiplayer chat.
-- SDL2 for screen backend support.
+- SDL2 >= 2.0.5 for screen backend support.
 - Pixman for low level pixel manipulation.
 - libpng for PNG image support.
-- zlib for XYZ image support.
-- fmtlib for interal logging.
+- zlib for XYZ image and ZIP archive support.
+- fmtlib >= 6 for text formatting/coloring and interal logging.
 
 ### Optional
 
-- FreeType2 for external font support (+ HarfBuzz for Unicode text shaping)
-- mpg123 for better MP3 audio support
-- WildMIDI for better MIDI audio support
-- Libvorbis / Tremor for Ogg Vorbis audio support
-- opusfile for Opus audio support
-- libsndfile for better WAVE audio support
-- libxmp for better tracker music support
-- SpeexDSP for proper audio resampling
+- FreeType2 for external font support (+ HarfBuzz for Unicode text shaping).
+- mpg123 for MP3 audio support.
+- WildMIDI for MIDI audio support using GUS patches.
+- FluidSynth for MIDI audio support using soundfonts.
+- Libvorbis / Tremor for Ogg Vorbis audio support.
+- opusfile for Opus audio support.
+- libsndfile for better WAVE audio support.
+- libxmp for tracker music support.
+- SpeexDSP or libsamplerate for proper audio resampling.
+- lhasa for LHA (.lzh) archive support.
 
-SDL 1.2 is still supported, but deprecated.
+The older SDL version 1.2 is still supported, but deprecated.
+Please do not add new platform code for this library.
 
 
 ## Credits
@@ -290,17 +293,16 @@ EasyRPG [Logo] and [Logo2] are licensed under the CC-BY-SA 4.0 license.
 
 EasyRPG Player makes use of the following 3rd party software:
 
+* [chat_multiplayer.cpp] In-game chat for SDL2 UI from CataractJustice/ynoclient,
+  filename was renamed to chatui.cpp - by ledgamedev, provided under the GPLv3
+* [strfnd.h] Minetest string utils - Copyright (C) 2013 celeron55,
+  Perttu Ahola \<celeron55@gmail.com\>, provided under the LGPLv2.1+
 * [FMMidi] YM2608 FM synthesizer emulator - Copyright (c) 2003-2006 yuno
   (Yoshio Uno), provided under the (3-clause) BSD license
 * [dr_wav] WAV audio loader and writer - Copyright (c) David Reid, provided
   under public domain or MIT-0
 * [PicoJSON] JSON parser/serializer - Copyright (c) 2009-2010 Cybozu Labs, Inc.
   Copyright (c) 2011-2015 Kazuho Oku, provided under the (2-clause) BSD license
-* [rang] terminal color library - by Abhinav Gauniyal, provided under Unlicense
-* [chat_multiplayer.cpp] In-game chat for SDL2 UI from CataractJustice/ynoclient,
-  filename was renamed to chatui.cpp - by ledgamedev, provided under the GPLv3
-* [strfnd.h] Minetest string utils - Copyright (C) 2013 celeron55,
-  Perttu Ahola \<celeron55@gmail.com\>, provided under the LGPLv2.1+
 
 ### 3rd party resources
 
@@ -318,6 +320,8 @@ EasyRPG Player makes use of the following 3rd party software:
 
 [liblcf]: https://github.com/EasyRPG/liblcf
 [sock++]: https://github.com/fpagliughi/sockpp
+[chat_multiplayer.cpp]: https://github.com/CataractJustice/ynoclient/blob/master/src/chat_multiplayer.cpp
+[strfnd.h]: https://github.com/minetest/minetest
 [crypto++]: https://www.cryptopp.com/wiki/Main_Page
 [BUILDING document]: docs/BUILDING.md
 [#easyrpg at irc.libera.chat]: https://kiwiirc.com/nextclient/#ircs://irc.libera.chat/#easyrpg?nick=rpgguest??
@@ -328,9 +332,6 @@ EasyRPG Player makes use of the following 3rd party software:
 [FMMidi]: http://unhaut.epizy.com/fmmidi
 [dr_wav]: https://github.com/mackron/dr_libs
 [PicoJSON]: https://github.com/kazuho/picojson
-[rang]: https://github.com/agauniyal/rang
-[chat_multiplayer.cpp]: https://github.com/CataractJustice/ynoclient/blob/master/src/chat_multiplayer.cpp
-[strfnd.h]: https://github.com/minetest/minetest
 [baekmuk]: https://kldp.net/baekmuk
 [Shinonome]: http://openlab.ring.gr.jp/efont/shinonome
 [ttyp0]: https://people.mpi-inf.mpg.de/~uwe/misc/uw-ttyp0

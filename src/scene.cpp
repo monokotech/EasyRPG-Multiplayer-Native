@@ -31,6 +31,7 @@
 #include "multiplayer/game_multiplayer.h"
 #include "main_data.h"
 #include "scene_settings.h"
+#include "game_map.h"
 
 #ifndef NDEBUG
 #define DEBUG_VALIDATE(x) Scene::DebugValidate(x)
@@ -203,8 +204,6 @@ void Scene::MainFunction() {
 		if (!Transition::instance().IsActive()) {
 			TransitionOut(next_scene);
 		}
-
-		Input::ResetNonSystemKeys();
 
 		init = false;
 	}
@@ -406,4 +405,5 @@ void Scene::OnTranslationChanged() {
 	if (Main_Data::game_actors) {
 		Main_Data::game_actors->ReloadActors();
 	}
+	Game_Map::OnTranslationChanged();
 }

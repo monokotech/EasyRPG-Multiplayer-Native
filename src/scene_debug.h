@@ -64,6 +64,7 @@ public:
 		eMap,
 		eFullHeal,
 		eLevel,
+		eMoveSpeed,
 		eCallCommonEvent,
 		eCallMapEvent,
 		eCallBattleEvent,
@@ -108,6 +109,7 @@ private:
 	void DoMap();
 	void DoFullHeal();
 	void DoLevel();
+	void DoMoveSpeed();
 	void DoCallCommonEvent();
 	void DoCallMapEvent();
 	void DoCallBattleEvent();

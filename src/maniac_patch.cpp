@@ -16,14 +16,19 @@
  */
 
 #include "maniac_patch.h"
+
+#include "input.h"
+#include "game_actors.h"
 #include "game_interpreter_control_variables.h"
-#include "main_data.h"
+#include "game_map.h"
 #include "game_interpreter.h"
+#include "game_party.h"
 #include "game_switches.h"
 #include "game_variables.h"
+#include "main_data.h"
 #include "output.h"
-#include "input.h"
 
+#include <lcf/reader_util.h>
 #include <vector>
 
 /*
@@ -600,4 +605,155 @@ bool ManiacPatch::GetKeyState(uint32_t key_id) {
 	}
 
 	return Input::IsRawKeyPressed(key);
+
+
+
+}
+
+bool ManiacPatch::CheckString(StringView str_l, StringView str_r, int op, bool ignore_case) {
+	auto check = [op](const auto& l, const auto& r) {
+		switch (op) {
+			case 0: // eq
+				return l == r;
+			case 2: // contains (l contains r)
+				return l.find(r) != std::string::npos;
+			case 1: // neq
+				return l != r;
+			case 3: // notContains (l does not contain r)
+				return l.find(r) == std::string::npos;
+			default:
+				return false;
+		}
+	};
+
+	if (ignore_case) {
+		std::string str_l_lower = Utils::LowerCase(str_l);
+		std::string str_r_lower = Utils::LowerCase(str_r);
+		return check(str_l_lower, str_r_lower);
+	}
+
+	return check(str_l, str_r);
+}
+
+StringView ManiacPatch::GetLcfName(int data_type, int id, bool is_dynamic) {
+	auto get_name = [id](StringView type, const auto& vec) -> StringView {
+		auto* data = lcf::ReaderUtil::GetElement(vec, id);
+		if (!data) {
+			Output::Warning("Unable to read {} name: {}", type, id);
+			return {};
+		}
+		return data->name;
+	};
+
+	switch (data_type)
+	{
+	case 0:  //.actor[a].name
+		if (is_dynamic) {
+			auto actor = Main_Data::game_actors->GetActor(id);
+			if (actor != nullptr) {
+				return actor->GetName();
+			}
+		}
+		else {
+			return get_name("Actor", lcf::Data::actors);
+		}
+		break;
+	case 1:	 return get_name("Skill", lcf::Data::skills);   //.skill[a].name
+	case 2:	 return get_name("Item", lcf::Data::items);   //.item[a].name
+	case 3:	 return get_name("Enemy", lcf::Data::enemies);   //.enemy[a].name
+	case 4:	 return get_name("Troop", lcf::Data::troops);   //.troop[a].name
+	case 5:	 return get_name("Terrain", lcf::Data::terrains);   //.terrain[a].name
+	case 6:	 return get_name("Attribute", lcf::Data::attributes);   //.element[a].name
+	case 7:	 return get_name("State", lcf::Data::states);   //.state[a].name
+	case 8:	 return get_name("Animation", lcf::Data::animations);   //.anim[a].name
+	case 9:	 return get_name("Chipset", lcf::Data::chipsets);   //.tileset[a].name
+	case 10: return Main_Data::game_switches->GetName(id);   //.s[a].name
+	case 11: return Main_Data::game_variables->GetName(id);   //.v[a].name
+	case 12: return {};  // FIXME: .t[a].name -- not sure how to get this for now
+	case 13: //.cev[a].name
+	{
+		// assuming the vector of common events here is ordered by common event ID
+		if (Game_Map::GetCommonEvents().size() >= id) {
+			return Game_Map::GetCommonEvents()[id - 1].GetName();
+		}
+		break;
+	}
+	case 14: return get_name("Class", lcf::Data::classes);   //.class[a].name
+	case 15: return get_name("BattlerAnimation", lcf::Data::battleranimations);   //.anim2[a].name
+	case 16: return Game_Map::GetMapName(id);   //.map[a].name
+	case 17:   //.mev[a].name
+	{
+		auto map = Game_Map::GetEvent(id);
+		if (map != nullptr) {
+			return map->GetName();
+		}
+		break;
+	}
+	case 18: //.member[a].name
+	{
+		auto actor = Main_Data::game_party->GetActor(id);
+		if (actor != nullptr) {
+			if (is_dynamic) {
+				return actor->GetName();
+			}
+			else {
+				id = actor->GetId();
+				return get_name("Actor", lcf::Data::actors);
+			}
+		}
+		break;
+	}
+	}
+
+	Output::Warning("GetLcfName: Unsupported data_type {} {}", data_type, id);
+	return {};
+}
+
+StringView ManiacPatch::GetLcfDescription(int data_type, int id, bool is_dynamic) {
+	auto get_desc = [id](StringView type, const auto& vec) -> StringView {
+		auto* data = lcf::ReaderUtil::GetElement(vec, id);
+		if (!data) {
+			Output::Warning("Unable to read {} description: {}", type, id);
+			return {};
+		}
+		if constexpr (std::is_same_v<typename std::decay_t<decltype(vec)>::value_type, lcf::rpg::Actor>) {
+			return data->title;
+		} else {
+			return data->description;
+		}
+	};
+
+	switch (data_type)
+	{
+	case 0:  //.actor[a].desc
+		if (is_dynamic) {
+			auto actor = Main_Data::game_actors->GetActor(id);
+			if (actor != nullptr) {
+				return actor->GetTitle();
+			}
+		}
+		else {
+			return get_desc("Actor", lcf::Data::actors);
+		}
+		break;
+	case 1: return get_desc("Skill", lcf::Data::skills); //.skill[a].desc
+	case 2: return get_desc("Item", lcf::Data::items); //.item[a].desc
+	case 18: //.member[a].desc
+	{
+		auto actor = Main_Data::game_party->GetActor(id);
+		if (actor != nullptr) {
+			if (is_dynamic) {
+				return actor->GetTitle();
+			}
+			else {
+				id = actor->GetId();
+				return get_desc("Actor", lcf::Data::actors);
+			}
+		}
+		break;
+	}
+	}
+
+	Output::Warning("GetLcfDescription: Unsupported data_type {} {}", data_type, id);
+	return {};
 }

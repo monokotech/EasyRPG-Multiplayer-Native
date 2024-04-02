@@ -29,6 +29,7 @@
 #include "system.h"
 #include "game_interpreter.h"
 
+class Game_Enemy;
 class Game_Event;
 class Game_CommonEvent;
 
@@ -57,7 +58,8 @@ public:
 
 	bool IsForceFleeEnabled() const;
 
-	bool ExecuteCommand() override;
+	bool ExecuteCommand(lcf::rpg::EventCommand const& com) override;
+
 private:
 	bool CommandCallCommonEvent(lcf::rpg::EventCommand const& com);
 	bool CommandForceFlee(lcf::rpg::EventCommand const& com);

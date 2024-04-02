@@ -68,6 +68,7 @@ namespace {
 	constexpr const auto SOUND_TYPES = Utils::MakeSvArray(
 			".opus", ".oga", ".ogg", ".wav", ".mp3", ".wma");
 	constexpr const auto FONTS_TYPES = Utils::MakeSvArray(".fon", ".fnt", ".bdf", ".ttf", ".ttc", ".otf", ".woff2", ".woff");
+	constexpr const auto TEXT_TYPES = Utils::MakeSvArray(".txt", ".csv", ""); // "" = Complete Filename (incl. extension) provided by the user
 }
 
 FilesystemView FileFinder::Game() {
@@ -89,7 +90,7 @@ FilesystemView FileFinder::Save() {
 
 	if (!game_fs) {
 		// Filesystem not initialized yet (happens on startup)
-		return FilesystemView();
+		return {};
 	}
 
 	// Not overwritten, check if game fs is writable. If not redirect the write operation.
@@ -284,6 +285,19 @@ std::string FileFinder::GetPathInsideGamePath(StringView path_in) {
 	return FileFinder::GetPathInsidePath(Game().GetFullPath(), path_in);
 }
 
+bool FileFinder::IsSupportedArchiveExtension(std::string path) {
+	Utils::LowerCaseInPlace(path);
+	StringView pv = path;
+
+#ifdef HAVE_LHASA
+	if (pv.ends_with(".lzh")) {
+		return true;
+	}
+#endif
+
+	return pv.ends_with(".zip") || pv.ends_with(".easyrpg");
+}
+
 void FileFinder::Quit() {
 	root_fs.reset();
 }
@@ -304,6 +318,40 @@ bool FileFinder::IsEasyRpgProject(const FilesystemView& fs){
 
 bool FileFinder::IsRPG2kProjectWithRenames(const FilesystemView& fs) {
 	return !FileExtGuesser::GetRPG2kProjectWithRenames(fs).Empty();
+}
+
+bool FileFinder::OpenViewToEasyRpgFile(FilesystemView& fs) {
+	auto files = fs.ListDirectory();
+	if (!files) {
+		return false;
+	}
+
+	int items = 0;
+	std::string filename;
+
+	for (auto& file : *files) {
+		if (StringView(file.second.name).ends_with(".easyrpg")) {
+			++items;
+			if (items == 2) {
+				// Contains more than one game
+				return false;
+			}
+			filename = file.second.name;
+		}
+	}
+
+	if (filename.empty()) {
+		return false;
+	}
+
+	// One candidate to check
+	auto ep_fs = fs.Create(filename);
+	if (FileFinder::IsValidProject(ep_fs)) {
+		fs = ep_fs;
+		return true;
+	} else {
+		return false;
+	}
 }
 
 bool FileFinder::HasSavegame() {
@@ -337,6 +385,15 @@ std::string find_generic(const DirectoryTree::Args& args) {
 	return FileFinder::Game().FindFile(args);
 }
 
+std::string find_generic_with_fallback(DirectoryTree::Args& args) {
+	std::string found = FileFinder::Save().FindFile(args);
+	if (found.empty()) {
+		return find_generic(args);
+	}
+
+	return found;
+}
+
 std::string FileFinder::FindImage(StringView dir, StringView name) {
 	DirectoryTree::Args args = { MakePath(dir, name), IMG_TYPES, 1, false };
 	return find_generic(args);
@@ -358,6 +415,11 @@ std::string FileFinder::FindFont(StringView name) {
 	return find_generic(args);
 }
 
+std::string FileFinder::FindText(StringView name) {
+	DirectoryTree::Args args = { MakePath("Text", name), TEXT_TYPES, 1, true };
+	return find_generic_with_fallback(args);
+}
+
 Filesystem_Stream::InputStream open_generic(StringView dir, StringView name, DirectoryTree::Args& args) {
 	if (!Tr::GetCurrentTranslationId().empty()) {
 		auto tr_fs = Tr::GetCurrentTranslationFilesystem();
@@ -374,6 +436,16 @@ Filesystem_Stream::InputStream open_generic(StringView dir, StringView name, Dir
 			Output::Debug("Cannot find: {}/{}", dir, name);
 		}
 	}
+	return is;
+}
+
+Filesystem_Stream::InputStream open_generic_with_fallback(StringView dir, StringView name, DirectoryTree::Args& args) {
+	auto is = FileFinder::Save().OpenFile(args);
+	if (!is) { is = open_generic(dir, name, args); }
+	if (!is) {
+		Output::Debug("Unable to open in either Game or Save: {}/{}", dir, name);
+	}
+
 	return is;
 }
 
@@ -395,6 +467,11 @@ Filesystem_Stream::InputStream FileFinder::OpenSound(StringView name) {
 Filesystem_Stream::InputStream FileFinder::OpenFont(StringView name) {
 	DirectoryTree::Args args = { MakePath("Font", name), FONTS_TYPES, 1, false };
 	return open_generic("Font", name, args);
+}
+
+Filesystem_Stream::InputStream FileFinder::OpenText(StringView name) {
+	DirectoryTree::Args args = { MakePath("Text", name), TEXT_TYPES, 1, false };
+	return open_generic_with_fallback("Text", name, args);
 }
 
 bool FileFinder::IsMajorUpdatedTree() {

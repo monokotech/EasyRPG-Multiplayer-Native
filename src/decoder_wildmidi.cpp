@@ -38,8 +38,16 @@
  */
 #define WILDMIDI_OPTS 0
 
+namespace {
+	bool once = false;
+	bool init = false;
+}
+
 static void WildMidiDecoder_deinit() {
-	WildMidi_Shutdown();
+	if (init) {
+		WildMidi_Shutdown();
+		init = false;
+	}
 }
 
 #if LIBWILDMIDI_VERSION >= 1027 // at least 0.4.3
@@ -80,10 +88,7 @@ bool WildMidiDecoder::Initialize(std::string& error_message) {
 	std::string config_file;
 	bool found = false;
 
-	static bool init = false;
-	static bool once = false;
-
-	// only initialize once
+	// only initialize once until a new game starts
 	if (once)
 		return init;
 	once = true;
@@ -107,7 +112,7 @@ bool WildMidiDecoder::Initialize(std::string& error_message) {
 			found = FileFinder::Root().Exists(config_file);
 		}
 	}
-#elif defined(GEKKO)
+#elif defined(__wii__)
 	// preferred under /data
 	config_file = "usb:/data/wildmidi/wildmidi.cfg";
 	found = FileFinder::Root().Exists(config_file);
@@ -133,6 +138,16 @@ bool WildMidiDecoder::Initialize(std::string& error_message) {
 	}
 	if (!found) {
 		config_file = "timidity.cfg";
+		found = FileFinder::Root().Exists(config_file);
+	}
+#elif defined(__WIIU__)
+	// preferred SD card directory
+	config_file = "/vol/external01/data/easyrpg-player/wildmidi.cfg";
+	found = FileFinder::Root().Exists(config_file);
+
+	// Current directory
+	if (!found) {
+		config_file = "wildmidi.cfg";
 		found = FileFinder::Root().Exists(config_file);
 	}
 #elif defined(__3DS__)
@@ -289,9 +304,18 @@ bool WildMidiDecoder::Initialize(std::string& error_message) {
 #endif
 
 	// setup deinitialization
-	atexit(WildMidiDecoder_deinit);
+	static bool atexit_once = false;
+	if (!atexit_once) {
+		atexit_once = true;
+		atexit(WildMidiDecoder_deinit);
+	}
 
 	return true;
+}
+
+void WildMidiDecoder::ResetState() {
+	once = false;
+	WildMidiDecoder_deinit();
 }
 
 bool WildMidiDecoder::Open(std::vector<uint8_t>& data) {

@@ -39,7 +39,7 @@ namespace AsyncHandler {
 	void CreateRequestMapping(const std::string& file);
 
 	/**
-	 * Clears all requests. They will hit the server again.
+	 * Clears all finished requests. They will hit the server again.
 	 * Called after changing the language to ensure the assets are replaced.
 	 */
 	void ClearRequests();
@@ -92,6 +92,12 @@ namespace AsyncHandler {
 	 * @return If any file with params is pending.
 	 */
 	bool IsFilePending(bool important, bool graphic);
+
+	/**
+	 * Saves the state of the Save filesystem.
+	 * Only works on emscripten, noop on other platforms.
+	 */
+	void SaveFilesystem();
 }
 
 using FileRequestBinding = std::shared_ptr<int>;

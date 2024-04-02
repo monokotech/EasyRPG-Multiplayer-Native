@@ -22,7 +22,7 @@ class AudioDecoderMidi;
 
 #include "audio_decoder_base.h"
 
-#if defined(GEKKO) || defined(__3DS__)
+#if defined(__wii__) || defined(__3DS__)
 #  define EP_MIDI_FREQ 22050
 #else
 #  define EP_MIDI_FREQ 44100
@@ -180,6 +180,16 @@ public:
 		return true;
 	}
 
+	/*
+	 * Does the sequencer need "sound off" messages sent to every channel between
+	 * tracks? NOTE: enabling this can break smooth fade outs between tracks.
+	 *
+	 * @return true only if synth needs "sound off" messages between tracks.
+	 */
+	virtual bool NeedsSoftReset() {
+		return false;
+	}
+
 	/**
 	 * Attempts to initialize a Midi library for processing the Midi data.
 	 *
@@ -193,6 +203,11 @@ public:
 	static std::unique_ptr<AudioDecoderBase> CreateWildMidi(bool resample);
 
 	static std::unique_ptr<AudioDecoderBase> CreateFmMidi(bool resample);
+
+	/**
+	 * Resets the global state of the midi libraries.
+	 */
+	static void Reset();
 
 protected:
 	int frequency = EP_MIDI_FREQ;
