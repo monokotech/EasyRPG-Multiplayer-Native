@@ -290,6 +290,11 @@ EasyRPG [Logo] and [Logo2] are licensed under the CC-BY-SA 4.0 license.
 
 EasyRPG Player makes use of the following 3rd party software:
 
+* [chat_multiplayer.cpp] In-game chat for SDL2 UI from CataractJustice/ynoclient,
+  filename was renamed to chatui.cpp - by ledgamedev, provided under the GPLv3
+* [strfnd.h] Minetest string utils - Copyright (C) 2013 celeron55,
+  Perttu Ahola \<celeron55@gmail.com\>, provided under the LGPLv2.1+
+* [socks5.h] Modern C++ SOCKS5 Client Handler - by harsath, provided under MIT
 * [FMMidi] YM2608 FM synthesizer emulator - Copyright (c) 2003-2006 yuno
   (Yoshio Uno), provided under the (3-clause) BSD license
 * [dr_wav] WAV audio loader and writer - Copyright (c) David Reid, provided
@@ -297,10 +302,6 @@ EasyRPG Player makes use of the following 3rd party software:
 * [PicoJSON] JSON parser/serializer - Copyright (c) 2009-2010 Cybozu Labs, Inc.
   Copyright (c) 2011-2015 Kazuho Oku, provided under the (2-clause) BSD license
 * [rang] terminal color library - by Abhinav Gauniyal, provided under Unlicense
-* [chat_multiplayer.cpp] In-game chat for SDL2 UI from CataractJustice/ynoclient,
-  filename was renamed to chatui.cpp - by ledgamedev, provided under the GPLv3
-* [strfnd.h] Minetest string utils - Copyright (C) 2013 celeron55,
-  Perttu Ahola \<celeron55@gmail.com\>, provided under the LGPLv2.1+
 
 ### 3rd party resources
 
@@ -319,6 +320,7 @@ EasyRPG Player makes use of the following 3rd party software:
 [liblcf]: https://github.com/EasyRPG/liblcf
 [sock++]: https://github.com/fpagliughi/sockpp
 [crypto++]: https://www.cryptopp.com/wiki/Main_Page
+[socks5.h]: https://github.com/harsath/SOCKS5-Proxy-Handler
 [BUILDING document]: docs/BUILDING.md
 [#easyrpg at irc.libera.chat]: https://kiwiirc.com/nextclient/#ircs://irc.libera.chat/#easyrpg?nick=rpgguest??
 [COPYING]: COPYING

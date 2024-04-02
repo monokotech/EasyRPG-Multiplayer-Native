@@ -29,6 +29,10 @@ void ClientConnection::SetAddress(std::string_view address) {
 	ParseAddress(address.data(), addr_host, addr_port);
 }
 
+void ClientConnection::SetSocks5Address(std::string_view address) {
+	ParseAddress(address.data(), socks5_addr_host, socks5_addr_port);
+}
+
 void ClientConnection::HandleOpen() {
 	connecting = false;
 	connected = true;
@@ -62,6 +66,7 @@ void ClientConnection::Open() {
 		return;
 	connecting = true;
 	connector = TCPSocketConnector("Client", addr_host, addr_port);
+	connector.ConfigSocks5(socks5_addr_host, socks5_addr_port);
 	connector.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
 	connector.OnOpen = [this]() { HandleOpen(); };
 	connector.OnClose = [this]() { HandleClose(); };
