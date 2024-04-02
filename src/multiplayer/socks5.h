@@ -3,52 +3,52 @@
 
 // Defaults
 enum class SOCKS5_DEFAULTS : std::uint8_t {
-	RSV = 0x00,
-	SUPPORT_AUTH = 0x01,
-	VERSION = 0x05,
-	VER_USERPASS = 0x01
+	SS_RSV = 0x00,
+	SS_SUPPORT_AUTH = 0x01,
+	SS_VERSION = 0x05,
+	SS_VER_USERPASS = 0x01
 };
 
 // Currently supported AUTH Types (0x00 is default)
 enum class SOCKS5_AUTH_TYPES : std::uint8_t {
-	NOAUTH = 0x00,
-	USERPASS = 0x02
+	SS_NOAUTH = 0x00,
+	SS_USERPASS = 0x02
 };
 
 // DNS resolve locally & make resolution on SOCKS5's endpoint
 enum class SOCKS5_RESOLVE {
-	REMOTE_RESOLVE = 0x01,
-	LOCAL_RESOLVE = 0x02
+	SS_REMOTE_RESOLVE = 0x01,
+	SS_LOCAL_RESOLVE = 0x02
 };
 
 enum class SOCKS5_ADDR_TYPE : std::uint8_t {
-	IPv4 = 0x01,
-	DOMAIN = 0x03,
-	IPv6 = 0x04
+	SS_IPv4 = 0x01,
+	SS_DOMAIN = 0x03,
+	SS_IPv6 = 0x04
 };
 
 // SOCKS5 Client connection request commands
 enum class SOCKS5_CLIENT_CONNCMD : std::uint8_t {
-	TCP_IP_STREAM = 0x01,
-	TCP_IP_PORT_BIND = 0x02,
-	UDP_PORT = 0x03
+	SS_TCP_IP_STREAM = 0x01,
+	SS_TCP_IP_PORT_BIND = 0x02,
+	SS_UDP_PORT = 0x03
 };
 
 struct SOCKS5_Initializer {
-	std::function<int(void*, const size_t&)> read;
-	std::function<int(const void*, const size_t&)> write;
+	std::function<ssize_t(void*, const size_t&)> read;
+	std::function<ssize_t(const void*, const size_t&)> write;
 
 	int SendGreeting() const {
 		std::vector<char> client_greeting_msg = {
-			static_cast<char>(SOCKS5_DEFAULTS::VERSION),
-			static_cast<char>(SOCKS5_DEFAULTS::SUPPORT_AUTH),
-			static_cast<char>(SOCKS5_AUTH_TYPES::NOAUTH)
+			static_cast<char>(SOCKS5_DEFAULTS::SS_VERSION),
+			static_cast<char>(SOCKS5_DEFAULTS::SS_SUPPORT_AUTH),
+			static_cast<char>(SOCKS5_AUTH_TYPES::SS_NOAUTH)
 		};
 		write(client_greeting_msg.data(), client_greeting_msg.size());
 
 		std::vector<char> server_choice(2);
 		int read_ret = read(server_choice.data(), server_choice.size());
-		if(server_choice.at(0) == 0x05 && server_choice.at(1) == static_cast<char>(SOCKS5_AUTH_TYPES::NOAUTH)) {
+		if(server_choice.at(0) == 0x05 && server_choice.at(1) == static_cast<char>(SOCKS5_AUTH_TYPES::SS_NOAUTH)) {
 			return 0;
 		} else {
 			return -1;
@@ -57,10 +57,10 @@ struct SOCKS5_Initializer {
 
 	int SendConnectionRequest(const std::string& destination_addr, const std::uint16_t& destination_port) {
 		std::vector<char> client_conn_request = {
-			static_cast<char>(SOCKS5_DEFAULTS::VERSION),
-			static_cast<char>(SOCKS5_CLIENT_CONNCMD::TCP_IP_STREAM),
-			static_cast<char>(SOCKS5_DEFAULTS::RSV),
-			static_cast<char>(SOCKS5_ADDR_TYPE::DOMAIN),
+			static_cast<char>(SOCKS5_DEFAULTS::SS_VERSION),
+			static_cast<char>(SOCKS5_CLIENT_CONNCMD::SS_TCP_IP_STREAM),
+			static_cast<char>(SOCKS5_DEFAULTS::SS_RSV),
+			static_cast<char>(SOCKS5_ADDR_TYPE::SS_DOMAIN),
 			static_cast<char>(destination_addr.size())
 		};
 		for(std::size_t i{}; i < destination_addr.length(); i++)
