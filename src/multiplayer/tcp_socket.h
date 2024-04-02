@@ -57,6 +57,8 @@ class TCPSocketConnector : public TCPSocketConnection {
 
 	std::string addr_host;
 	in_port_t addr_port;
+	std::string socks5_req_addr_host;
+	in_port_t socks5_req_addr_port;
 
 public:
 	TCPSocketConnector() {}
@@ -65,6 +67,8 @@ public:
 			const std::string _host, const uint16_t _port)
 		: TCPSocketConnection(std::move(_label)),
 		addr_host(_host), addr_port(_port) {}
+
+	void ConfigSocks5(const std::string host, const uint16_t port);
 
 	void Connect(const size_t connect_timeout_seconds,
 		const size_t read_timeout_seconds);

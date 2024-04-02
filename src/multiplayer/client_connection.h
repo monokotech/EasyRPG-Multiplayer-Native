@@ -15,6 +15,7 @@ public:
 	}
 
 	void SetAddress(std::string_view address);
+	void SetSocks5Address(std::string_view address);
 
 	ClientConnection();
 	ClientConnection(ClientConnection&&);
@@ -42,6 +43,8 @@ protected:
 
 	std::string addr_host;
 	uint16_t addr_port{ 6500 };
+	std::string socks5_addr_host;
+	uint16_t socks5_addr_port{ 1080 };
 	TCPSocketConnector connector;
 
 	bool connecting = false;

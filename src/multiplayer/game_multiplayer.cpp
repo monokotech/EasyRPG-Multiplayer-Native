@@ -531,6 +531,8 @@ void Game_Multiplayer::Connect() {
 	if (connection.IsConnected()) return;
 	active = true;
 	connection.SetAddress(cfg.client_remote_address.Get());
+	if (!cfg.client_socks5_address.Get().empty())
+		connection.SetSocks5Address(cfg.client_socks5_address.Get());
 	CUI().SetStatusConnection(false, true);
 	connection.Open();
 	if (room_id != -1)

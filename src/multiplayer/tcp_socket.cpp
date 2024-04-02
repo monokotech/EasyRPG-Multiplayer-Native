@@ -3,6 +3,7 @@
 #include <vector>
 #include "connection.h"
 #include "sockpp/exception.h"
+#include "socks5.h"
 
 constexpr size_t MAX_QUEUE_SIZE = Multiplayer::Connection::MAX_QUEUE_SIZE;
 
@@ -164,6 +165,16 @@ void TCPSocketConnection::Close() {
  * TCPSocket Connector
  */
 
+
+void TCPSocketConnector::ConfigSocks5(const std::string host, const uint16_t port) {
+	if (!host.empty()) {
+		socks5_req_addr_host = addr_host;
+		socks5_req_addr_port = addr_port;
+		addr_host = host;
+		addr_port = port;
+	}
+}
+
 void TCPSocketConnector::Connect(const size_t connect_timeout_seconds,
 		const size_t read_timeout_seconds) {
 	std::thread([this, connect_timeout_seconds, read_timeout_seconds]() {
@@ -198,6 +209,13 @@ void TCPSocketConnector::Connect(const size_t connect_timeout_seconds,
 				+ connector.last_error_str());
 			OnClose();
 			return;
+		}
+		if (!socks5_req_addr_host.empty()) {
+			SOCKS5_Initializer socks5_init;
+			socks5_init.read = [this](auto p1, auto& p2) { return connector.read(p1, p2); };
+			socks5_init.write = [this](auto p1, auto& p2) { return connector.write(p1, p2); };
+			socks5_init.SendGreeting();
+			socks5_init.SendConnectionRequest(socks5_req_addr_host, socks5_req_addr_port);
 		}
 		InitSocket(connector.clone());
 		CreateConnectionThread(read_timeout_seconds);
