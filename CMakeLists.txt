@@ -876,23 +876,23 @@ endif()
 option(PLAYER_MULTIPLAYER "Enable Multiplayer." OFF)
 
 if(PLAYER_MULTIPLAYER)
-	set(SOCKPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/sockpp")
-	if(NOT EXISTS ${SOCKPP_PATH})
+	set(LIBUV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/libuv")
+	if(NOT EXISTS ${LIBUV_PATH})
 		find_package(Git REQUIRED)
 		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
 			"-c" "advice.detachedHead=false" "--branch"
-			"v0.8.1"
-			"https://github.com/fpagliughi/sockpp"
-			"${SOCKPP_PATH}")
+			"v1.44.2"
+			"https://github.com/libuv/libuv"
+			"${LIBUV_PATH}")
 		include(Patch)
-		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${SOCKPP_PATH}"
-			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/sockpp.patch )
+		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${LIBUV_PATH}"
+			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/libuv.patch )
 	endif()
 	set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-	set(SOCKPP_BUILD_SHARED OFF)
-	set(SOCKPP_BUILD_STATIC ON)
-	add_subdirectory(${SOCKPP_PATH})
-	target_link_libraries(${PROJECT_NAME} sockpp-static)
+	set(BUILD_TESTING OFF)
+	set(LIBUV_BUILD_SHARED OFF)
+	add_subdirectory(${LIBUV_PATH})
+	target_link_libraries(${PROJECT_NAME} uv_a)
 endif()
 
 if(BUILD_CLIENT) # BUILD_CLIENT
@@ -1444,7 +1444,7 @@ if(BUILD_SERVER)
 
 	player_find_package(NAME fmt TARGET fmt::fmt REQUIRED)
 	target_link_libraries(${PROJECT_NAME}_server lcf)
-	target_link_libraries(${PROJECT_NAME}_server sockpp-static)
+	target_link_libraries(${PROJECT_NAME}_server uv_a)
 
 	add_executable(${PROJECT_NAME}_server_exe "src/multiplayer/server.cpp")
 	set_target_properties(${PROJECT_NAME}_server_exe PROPERTIES OUTPUT_NAME "easyrpg-player-server")
