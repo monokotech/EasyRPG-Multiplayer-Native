@@ -241,6 +241,7 @@ Yes, you can press the M key to toggle mute on and off.
 
 - [liblcf] for RPG Maker data reading.
 - [crypto++] for multiplayer chat.
+- [libuv] for multiplayer networking.
 - SDL2 for screen backend support.
 - Pixman for low level pixel manipulation.
 - libpng for PNG image support.
@@ -319,6 +320,7 @@ EasyRPG Player makes use of the following 3rd party software:
 [liblcf]: https://github.com/EasyRPG/liblcf
 [crypto++]: https://www.cryptopp.com/wiki/Main_Page
 [socks5.h]: https://github.com/harsath/SOCKS5-Proxy-Handler
+[libuv]: https://github.com/libuv/libuv
 [BUILDING document]: docs/BUILDING.md
 [#easyrpg at irc.libera.chat]: https://kiwiirc.com/nextclient/#ircs://irc.libera.chat/#easyrpg?nick=rpgguest??
 [COPYING]: COPYING

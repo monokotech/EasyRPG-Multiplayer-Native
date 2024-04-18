@@ -1,0 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7f46682..c6be041 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.4)
++cmake_minimum_required(VERSION 3.9)
+ project(libuv LANGUAGES C)
+ 
+ cmake_policy(SET CMP0057 NEW) # Enable IN_LIST operator
+@@ -213,6 +213,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
+ endif()
+ 
+ if(CMAKE_SYSTEM_NAME STREQUAL "Android")
++  add_compile_options(-Wno-implicit-function-declaration)
+   list(APPEND uv_defines _GNU_SOURCE)
+   list(APPEND uv_libraries dl)
+   list(APPEND uv_sources

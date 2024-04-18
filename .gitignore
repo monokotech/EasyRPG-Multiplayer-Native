@@ -111,7 +111,7 @@ __MACOSX
 
 # legacy
 /lib/liblcf/
-/lib/sockpp/
+/lib/libuv/
 /lib/cryptopp-cmake/
 .buildconfig
 
