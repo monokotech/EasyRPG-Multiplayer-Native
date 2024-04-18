@@ -240,7 +240,6 @@ Yes, you can press the M key to toggle mute on and off.
 ### Required
 
 - [liblcf] for RPG Maker data reading.
-- [sock++] for multiplayer.
 - [crypto++] for multiplayer chat.
 - SDL2 >= 2.0.5 for screen backend support.
 - Pixman for low level pixel manipulation.
@@ -320,7 +319,6 @@ EasyRPG Player makes use of the following 3rd party software:
   provided under the MIT license (only used by the Emscripten web shell)
 
 [liblcf]: https://github.com/EasyRPG/liblcf
-[sock++]: https://github.com/fpagliughi/sockpp
 [chat_multiplayer.cpp]: https://github.com/CataractJustice/ynoclient/blob/master/src/chat_multiplayer.cpp
 [strfnd.h]: https://github.com/minetest/minetest
 [crypto++]: https://www.cryptopp.com/wiki/Main_Page
