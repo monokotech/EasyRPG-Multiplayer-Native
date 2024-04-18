@@ -7,7 +7,6 @@
 #include <condition_variable>
 #include <mutex>
 #include "messages.h"
-#include "tcp_socket.h"
 #include "../game_config.h"
 
 class ServerSideClient;
@@ -19,8 +18,6 @@ class ServerMain {
 	int client_id = 10;
 	std::map<int, std::unique_ptr<ServerSideClient>> clients;
 
-	TCPSocketListener tcp_socket_listener;
-	TCPSocketListener tcp_socket_listener_v6;
 	std::string addr_host;
 	std::string addr_host_v6;
 	uint16_t addr_port{ 6500 };

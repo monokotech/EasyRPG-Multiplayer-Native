@@ -6,9 +6,6 @@ constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
 ClientConnection::ClientConnection() {
-	// This is primarily required for Win32, to startup the WinSock DLL.
-	// On Unix-style platforms it disables SIGPIPE signals.
-	sockpp::initialize();
 }
 // ->> unused code
 ClientConnection::ClientConnection(ClientConnection&& o)
@@ -65,21 +62,12 @@ void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
 	connecting = true;
-	connector = TCPSocketConnector("Client", addr_host, addr_port);
-	connector.ConfigSocks5(socks5_addr_host, socks5_addr_port);
-	connector.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
-	connector.OnOpen = [this]() { HandleOpen(); };
-	connector.OnClose = [this]() { HandleClose(); };
-	connector.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
-	connector.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
-	connector.Connect(6, cfg->no_heartbeats.Get() ? 0 : 6);
 }
 
 void ClientConnection::Close() {
 	connecting = false;
 	if (!connected)
 		return;
-	connector.Close();
 	m_queue = decltype(m_queue){};
 	connected = false;
 }
@@ -87,7 +75,6 @@ void ClientConnection::Close() {
 void ClientConnection::Send(std::string_view data) {
 	if (!connected)
 		return;
-	connector.Send(data);
 }
 
 void ClientConnection::Receive() {

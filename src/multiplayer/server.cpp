@@ -19,6 +19,9 @@ using namespace Messages;
 constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
+class TCPSocketConnection {
+};
+
 class ServerConnection : public Connection {
 	int& id;
 	ServerMain* server;
@@ -48,25 +51,16 @@ protected:
 public:
 	ServerConnection(int &_id, ServerMain* _server, TCPSocketConnection& _tcp_socket_conn)
 			: id(_id), server(_server) {
-		tcp_socket_conn = std::move(_tcp_socket_conn);
 	}
 
 	void Open() override {
-		tcp_socket_conn.OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
-		tcp_socket_conn.OnOpen = [this]() { HandleOpen(); };
-		tcp_socket_conn.OnClose = [this]() { HandleClose(); };
-		tcp_socket_conn.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
-		tcp_socket_conn.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
-		tcp_socket_conn.CreateConnectionThread(server->GetConfig().no_heartbeats.Get() ? 0 : 6);
 	}
 
 	void Close() override {
-		tcp_socket_conn.Close();
 	}
 
 	void Send(std::string_view data) override {
 		std::lock_guard lock(m_send_mutex);
-		tcp_socket_conn.Send(data); // send to self
 	}
 
 	template<typename T>
@@ -456,7 +450,6 @@ void ServerMain::SendTo(const int& from_client_id, const int& to_client_id,
 }
 
 ServerMain::ServerMain() {
-	sockpp::initialize();
 }
 
 void ServerMain::Start(bool blocking) {
@@ -510,8 +503,6 @@ void ServerMain::Start(bool blocking) {
 	auto CreateServerSideClient = [this](TCPSocketConnection& tcp_socket_conn) {
 		if (clients.size() >= cfg.server_max_users.Get()) {
 			std::string_view data = "\uFFFD1";
-			tcp_socket_conn.Send(data);
-			tcp_socket_conn.Close();
 		} else {
 			auto& client = clients[client_id];
 			client.reset(new ServerSideClient(this, client_id++, tcp_socket_conn));
@@ -520,18 +511,7 @@ void ServerMain::Start(bool blocking) {
 	};
 
 	if (cfg.server_bind_address_v6.Get() != "") {
-		tcp_socket_listener_v6 = TCPSocketListener("Server", addr_host_v6, addr_port_v6, true);
-		tcp_socket_listener_v6.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
-		tcp_socket_listener_v6.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
-		tcp_socket_listener_v6.OnConnection = CreateServerSideClient;
-		tcp_socket_listener_v6.CreateListenerThread();
 	}
-
-	tcp_socket_listener = TCPSocketListener("Server", addr_host, addr_port);
-	tcp_socket_listener.OnLogDebug = [](std::string v) { Output::Debug(std::move(v)); };
-	tcp_socket_listener.OnLogWarning = [](std::string v) { Output::Warning(std::move(v)); };
-	tcp_socket_listener.OnConnection = CreateServerSideClient;
-	tcp_socket_listener.CreateListenerThread(blocking);
 }
 
 void ServerMain::Stop() {
@@ -543,8 +523,6 @@ void ServerMain::Stop() {
 		it.second->Send("\uFFFD0");
 		it.second->Close();
 	}
-	tcp_socket_listener.Shutdown();
-	tcp_socket_listener_v6.Shutdown();
 	// stop message queue loop
 	m_message_data_queue.emplace(new MessageDataEntry{ 0, 0, Messages::CV_NULL, "" });
 	m_message_data_queue_cv.notify_one();
