@@ -5,6 +5,8 @@
 #include "connection.h"
 #include "../game_config.h"
 
+class Socket;
+
 using namespace Multiplayer;
 
 class ClientConnection : public Connection {
@@ -44,6 +46,7 @@ protected:
 	uint16_t addr_port{ 6500 };
 	std::string socks5_addr_host;
 	uint16_t socks5_addr_port{ 1080 };
+	std::unique_ptr<Socket> socket;
 
 	bool connecting = false;
 	bool connected = false;

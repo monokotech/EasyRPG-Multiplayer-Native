@@ -1,4 +1,5 @@
 #include "server.h"
+#include "socket.h"
 #include <thread>
 #include "../utils.h"
 #include "../output.h"

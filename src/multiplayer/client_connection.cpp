@@ -1,11 +1,13 @@
 #include <thread>
 #include "client_connection.h"
+#include "socket.h"
 #include "../output.h"
 
 constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
 ClientConnection::ClientConnection() {
+	socket.reset(new Socket());
 }
 // ->> unused code
 ClientConnection::ClientConnection(ClientConnection&& o)
@@ -61,20 +63,26 @@ void ClientConnection::HandleData(const char* data, const size_t& num_bytes) {
 void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
+	socket->OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
+	socket->OnOpen = [this]() { HandleOpen(); };
+	socket->OnClose = [this]() { HandleClose(); };
+	socket->Connect(addr_host, addr_port);
 	connecting = true;
 }
 
 void ClientConnection::Close() {
-	connecting = false;
-	if (!connected)
+	if (!connected && !connecting)
 		return;
+	socket->Disconnect();
 	m_queue = decltype(m_queue){};
+	connecting = false;
 	connected = false;
 }
 
 void ClientConnection::Send(std::string_view data) {
 	if (!connected)
 		return;
+	socket->Send(data);
 }
 
 void ClientConnection::Receive() {
