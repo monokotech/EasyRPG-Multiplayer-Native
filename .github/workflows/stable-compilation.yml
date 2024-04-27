@@ -58,7 +58,8 @@ jobs:
           VER="(GA, `date +%Y-%m-%d`)"
           cmake -G Ninja -B build . \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-            -DPLAYER_BUILD_LIBS=on -DPLAYER_VERSION_APPEND="$VER"
+            -DPLAYER_MULTIPLAYER=on -DPLAYER_BUILD_LIBLCF=on \
+            -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 
       - name: Install
