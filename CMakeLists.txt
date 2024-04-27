@@ -849,12 +849,6 @@ option(PLAYER_BUILD_LIBLCF "Instead of detecting liblcf, clone liblcf into lib/l
 set(PLAYER_BUILD_LIBLCF_GIT "https://github.com/EasyRPG/liblcf.git" CACHE STRING "Git repository of liblcf to clone. Requires PLAYER_BUILD_LIBLCF=ON.")
 set(PLAYER_BUILD_LIBLCF_BRANCH "master" CACHE STRING "Branch of the liblcf repository to clone. Requires PLAYER_BUILD_LIBLCF=ON.")
 
-# build libs
-option(PLAYER_BUILD_LIBS "Clone all libs into lib/ and built it along with the Player." OFF)
-if(PLAYER_BUILD_LIBS)
-	set(PLAYER_BUILD_LIBLCF ON)
-endif()
-
 if(PLAYER_BUILD_LIBLCF)
 	# liblcf is built as part of this cmake file
 	set(LIBLCF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/liblcf")
@@ -882,7 +876,9 @@ else()
 		REQUIRED)
 endif()
 
-if(PLAYER_BUILD_LIBS)
+option(PLAYER_MULTIPLAYER "Enable Multiplayer." OFF)
+
+if(PLAYER_MULTIPLAYER)
 	set(SOCKPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/sockpp")
 	if(NOT EXISTS ${SOCKPP_PATH})
 		find_package(Git REQUIRED)
@@ -904,7 +900,7 @@ endif()
 
 if(BUILD_CLIENT) # BUILD_CLIENT
 
-if(PLAYER_BUILD_LIBS)
+if(PLAYER_MULTIPLAYER)
 	set(CRYPTOPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/cryptopp-cmake")
 	set(CRYPTOPP_SOURCES "${CRYPTOPP_PATH}/cryptopp/cryptopp")
 	if(NOT EXISTS ${CRYPTOPP_PATH})

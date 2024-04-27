@@ -69,9 +69,10 @@ jobs:
           cmake -G Ninja -B build . \
             -DBUILD_CLIENT=off -DBUILD_SERVER=on \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=usr \
+            -DPLAYER_BUILD_LIBLCF=on \
             -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
             -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
-            -DPLAYER_BUILD_LIBS=on -DPLAYER_VERSION_APPEND="$VER"
+            -DPLAYER_MULTIPLAYER=on -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 
       - name: Install
@@ -139,9 +140,10 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} ^
             -DCMAKE_TOOLCHAIN_FILE=.\vcpkg\scripts\buildsystems\vcpkg.cmake ^
             -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+            -DPLAYER_BUILD_LIBLCF=on ^
             -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" ^
             -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" ^
-            -DPLAYER_BUILD_LIBS=on
+            -DPLAYER_MULTIPLAYER=on
           :: https://stackoverflow.com/questions/19024259/how-to-change-the-build-type-to-release-mode-in-cmake/20423820#20423820
           cmake --build build --config RelWithDebInfo
 
@@ -213,7 +215,7 @@ jobs:
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
           ORG_GRADLE_PROJECT_ABI_FILTERS_RELEASE: ${{ matrix.abi }}
         run: |
-          cmake_opts="-DPLAYER_BUILD_LIBS=on -DCMAKE_BUILD_TYPE=Release"" "
+          cmake_opts="-DPLAYER_MULTIPLAYER=on -DCMAKE_BUILD_TYPE=Release -DPLAYER_BUILD_LIBLCF=on"" "
           cmake_opts+="-DPLAYER_BUILD_LIBLCF_GIT='https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf'"" "
           cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"
           cd builds/android
@@ -282,9 +284,10 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=10.12 \
           -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DPLAYER_BUILD_LIBLCF=on \
           -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
           -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
-          -DPLAYER_BUILD_LIBS=on \
+          -DPLAYER_MULTIPLAYER=on \
           -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 

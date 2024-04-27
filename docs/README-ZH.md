@@ -142,7 +142,7 @@ pacman -S harfbuzz mpg123 wildmidi libvorbis opusfile libsndfile libxmp speexdsp
 
 # 编译
 # 可以通过调整 `-DBUILD_CLIENT=on -DBUILD_SERVER=off` 来决定是否编译独立的服务器
-cmake -B build -DBUILD_CLIENT=on -DBUILD_SERVER=off -DPLAYER_BUILD_LIBS=on -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+cmake -B build -DBUILD_CLIENT=on -DBUILD_SERVER=off -DPLAYER_MULTIPLAYER=on -DPLAYER_BUILD_LIBLCF=on -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 cmake --build build -j${$(getconf _NPROCESSORS_ONLN):-2}
 ```
 
@@ -164,7 +164,7 @@ brew install sdl2 pixman libpng zlib fmt
 brew install freetype mpg123 wildmidi libvorbis opusfile libsndfile speexdsp
 
 # 编译
-ICU_ROOT=$(brew --prefix)/opt/icu4c cmake -B build -DPLAYER_BUILD_LIBS=on -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPLAYER_WITH_OPUS=off -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+ICU_ROOT=$(brew --prefix)/opt/icu4c cmake -B build -DPLAYER_MULTIPLAYER=on -DPLAYER_BUILD_LIBLCF=on -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPLAYER_WITH_OPUS=off -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 cmake --build build -j${$(getconf _NPROCESSORS_ONLN):-2}
 ```
 
