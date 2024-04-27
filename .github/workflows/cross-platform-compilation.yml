@@ -2,12 +2,24 @@
 # +- secrets: APK_KEY_ALIAS, APK_KEY_PASSWORD, APK_STORE_FILE_B64
 # +- variables: TOOLCHAIN_RELEASE_NAME
 
-name: Releases
+name: Cross-platform Compilation
 
 on:
   push:
-    tags:
-    - '*'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      git-ref:
+        description: Git Ref (Optional)
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 permissions:
   contents: write
@@ -27,7 +39,7 @@ jobs:
           - ubuntu:22.04
 
     env:
-      FILENAME: "Linux-Server-build-${{ matrix.image }}-${{ github.ref_name }}"
+      FILENAME: "EPMP-Server-${{ github.ref_name }}-${{ matrix.image }}"
 
     steps:
       - name: Install dependencies
@@ -39,8 +51,17 @@ jobs:
             libicu-dev libexpat1-dev libfmt-dev
 
       - name: Clone Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         if: github.event.inputs.git-ref == ''
+      - name: Clone Repository (with custom ref)
+        uses: actions/checkout@v4
+        if: github.event.inputs.git-ref != ''
+        with:
+          ref: ${{ github.event.inputs.git-ref }}
+
+      - name: Setup Env
+        run: |
+          echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | sed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
 
       - name: Compile
         run: |
@@ -48,6 +69,8 @@ jobs:
           cmake -G Ninja -B build . \
             -DBUILD_CLIENT=off -DBUILD_SERVER=on \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=usr \
+            -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
+            -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
             -DPLAYER_BUILD_LIBS=on -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 
@@ -57,10 +80,12 @@ jobs:
           cmake --build build --target install
 
       - name: Create Archive
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip usr
 
       - name: Create Github Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
@@ -82,18 +107,26 @@ jobs:
             triplet: x64-windows-static
 
     env:
-      FILENAME: "Windows-build-${{ matrix.arch }}-${{ github.ref_name }}"
+      FILENAME: "EPMP-${{ github.ref_name }}-Windows-${{ matrix.arch }}"
 
     steps:
       - name: Setup Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@release/v1
 
       - name: Clone Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         if: github.event.inputs.git-ref == ''
+      - name: Clone Repository (with custom ref)
+        uses: actions/checkout@v4
+        if: github.event.inputs.git-ref != ''
+        with:
+          ref: ${{ github.event.inputs.git-ref }}
+
+      - name: Setup Env
+        run: |
+          echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | sed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
 
       - name: Setup Toolchain
-        shell: bash
         run: |
           aria2c -o tmp.zip \
             "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/vcpkg-export.zip"
@@ -106,16 +139,19 @@ jobs:
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} ^
             -DCMAKE_TOOLCHAIN_FILE=.\vcpkg\scripts\buildsystems\vcpkg.cmake ^
             -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+            -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" ^
+            -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" ^
             -DPLAYER_BUILD_LIBS=on
-          # https://stackoverflow.com/questions/19024259/how-to-change-the-build-type-to-release-mode-in-cmake/20423820#20423820
+          :: https://stackoverflow.com/questions/19024259/how-to-change-the-build-type-to-release-mode-in-cmake/20423820#20423820
           cmake --build build --config RelWithDebInfo
 
       - name: Create Archive
-        shell: bash
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip build/RelWithDebInfo
 
       - name: Create Github Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
@@ -134,7 +170,7 @@ jobs:
           - arm64-v8a
 
     env:
-      FILENAME: "Android-build-${{ matrix.abi }}-${{ github.ref_name }}"
+      FILENAME: "EPMP-${{ github.ref_name }}-Android-${{ matrix.abi }}"
 
     steps:
       - name: Setup JDK
@@ -144,8 +180,17 @@ jobs:
           java-version: '17'
 
       - name: Clone Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         if: github.event.inputs.git-ref == ''
+      - name: Clone Repository (with custom ref)
+        uses: actions/checkout@v4
+        if: github.event.inputs.git-ref != ''
+        with:
+          ref: ${{ github.event.inputs.git-ref }}
+
+      - name: Setup Env
+        run: |
+          echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | sed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
 
       - name: Setup Toolchain
         run: |
@@ -168,14 +213,18 @@ jobs:
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
           ORG_GRADLE_PROJECT_ABI_FILTERS_RELEASE: ${{ matrix.abi }}
         run: |
+          cmake_opts="-DPLAYER_BUILD_LIBS=on -DCMAKE_BUILD_TYPE=Release"" "
+          cmake_opts+="-DPLAYER_BUILD_LIBLCF_GIT='https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf'"" "
+          cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"
           cd builds/android
           ./gradlew -PtoolchainDirs="${{ github.workspace }}/toolchain" \
-            -PcmakeOptions="-DPLAYER_BUILD_LIBS=on -DCMAKE_BUILD_TYPE=Release" \
+            -PcmakeOptions="$cmake_opts" \
             assembleRelease
           cp -v app/build/outputs/apk/release/app-release.apk \
             ${{ github.workspace }}/${{ env.FILENAME }}.apk
 
       - name: Create Github Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.apk"
@@ -194,12 +243,22 @@ jobs:
           - arm64
 
     env:
-      FILENAME: "macOS-build-${{ matrix.arch }}-${{ github.ref_name }}"
+      FILENAME: "EPMP-${{ github.ref_name }}-macOS-${{ matrix.arch }}"
 
     steps:
       - name: Clone Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         if: github.event.inputs.git-ref == ''
+      - name: Clone Repository (with custom ref)
+        uses: actions/checkout@v4
+        if: github.event.inputs.git-ref != ''
+        with:
+          ref: ${{ github.event.inputs.git-ref }}
+
+      - name: Setup Env
+        run: |
+          brew install gnu-sed
+          echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | gsed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
 
       - name: Setup Toolchain
         run: |
@@ -223,15 +282,19 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=10.12 \
           -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
+          -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
           -DPLAYER_BUILD_LIBS=on \
           -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 
       - name: Create Archive
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip "build/EasyRPG Player.app"
 
       - name: Create Github Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
