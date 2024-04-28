@@ -102,6 +102,14 @@ void ClientConnection::Receive() {
 	}
 }
 
+/**
+ * Here are the four different states of (v != "room") == include:
+ *  1. true false: Collect other_pkt.
+ *  2. false false: Convert from other_pkt to room_pkt and drain other_pkt(s).
+ *  3. false true: Collect room_pkt.
+ *  4. true true: Convert from room_pkt to other_pkt and drain room_pkt(s).
+ * In simple terms, room_pkt and other_pkt are collected separately for sending, without mixing them.
+ */
 void ClientConnection::FlushQueue() {
 	auto namecmp = [] (std::string_view v, bool include) {
 		return (v != "room") == include;
@@ -112,13 +120,6 @@ void ClientConnection::FlushQueue() {
 		std::string bulk;
 		while (!m_queue.empty()) {
 			auto& e = m_queue.front();
-			/*!
-			 * if namecmp, break: flush packet queue by "name" (v != "name")
-			 * not "name":true include:false: concat
-			 * is "name":false include:false: break, Send, toggle include
-			 * is "name":false include:true: concat
-			 * not "name":true include:true: break, Send, toggle include
-			 */
 			if (namecmp(e->GetName(), include))
 				break;
 			auto data = e->ToBytes();
