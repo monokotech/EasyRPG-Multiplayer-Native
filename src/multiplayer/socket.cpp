@@ -166,35 +166,38 @@ void Socket::Close() {
 		return;
 	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
-		if (socket->is_connect) {
-			// call uv_stop
-			socket->async_data.stop_flag = true;
-			uv_async_send(&socket->async);
-		}
-		if (!socket->close_silently)
-			socket->OnClose();
+		socket->m_send_queue = decltype(m_send_queue){};
+		socket->is_sending = false;
+		socket->OnClose();
 	});
-	// Send a noop message to trigger the close_cb
-	if (is_connect)
-		uv_async_send(&async);
 }
 
-void Socket::Connect(const std::string_view _host, const uint16_t _port) {
-	if (is_connect)
+/**
+ * ConnectorSocket
+ */
+
+void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port) {
+	if (is_connected)
 		return;
-	is_connect = true;
-
-	m_send_queue = decltype(m_send_queue){};
-	is_sending = false;
-
-	close_silently = false;
+	is_connected = true;
 
 	addr_host = _host;
 	addr_port = _port;
 
+	OnOpen = OnConnect;
+	OnClose = [this]() {
+		// call uv_stop
+		async_data.stop_flag = true;
+		uv_async_send(&async);
+		if (!manually_close_flag)
+			OnDisconnect();
+	};
+
 	std::thread([this]() {
 		uv_loop_t loop;
 		uv_connect_t connect_req;
+
+		connect_req.data = this;
 
 		err = uv_loop_init(&loop);
 		if (err < 0) {
@@ -212,12 +215,6 @@ void Socket::Connect(const std::string_view _host, const uint16_t _port) {
 				uv_stop(async_data->loop);
 		});
 
-		err = uv_tcp_init(&loop, &stream);
-		if (err < 0) {
-			Output::Warning("Socket initialization error: {}", uv_strerror(err));
-			return;
-		}
-
 		auto Cleanup = [this, &loop]() {
 			uv_close(reinterpret_cast<uv_handle_t*>(&async), nullptr);
 			uv_run(&loop, UV_RUN_DEFAULT); // update state
@@ -226,17 +223,14 @@ void Socket::Connect(const std::string_view _host, const uint16_t _port) {
 			if (err) {
 				Output::Warning("Close loop error: {}", uv_strerror(err));
 			}
-			is_connect = false;
+			is_connected = false;
 		};
 
 		// Call this if not connected
 		auto CloseDirectly = [this, Cleanup] () {
 			Cleanup();
-			OnClose();
+			OnDisconnect();
 		};
-
-		stream.data = this;
-		connect_req.data = this;
 
 		struct addrinfo hints;
 		memset(&hints, 0, sizeof(hints));
@@ -249,7 +243,8 @@ void Socket::Connect(const std::string_view _host, const uint16_t _port) {
 			CloseDirectly();
 			return;
 		}
-		uv_tcp_connect(&connect_req, &stream, req.addrinfo->ai_addr,
+		InitStream(&loop);
+		uv_tcp_connect(&connect_req, GetStream(), req.addrinfo->ai_addr,
 				[](uv_connect_t *connect_req, int status) {
 			auto socket = static_cast<Socket*>(connect_req->data);
 			if (status < 0) {
@@ -267,7 +262,9 @@ void Socket::Connect(const std::string_view _host, const uint16_t _port) {
 	}).detach();
 }
 
-void Socket::Disconnect() {
-	close_silently = true;
+void ConnectorSocket::Disconnect() {
+	manually_close_flag = true;
 	Close();
+	// Send a noop message to trigger the close_cb of uv_close
+	uv_async_send(&async);
 }

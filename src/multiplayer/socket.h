@@ -41,15 +41,18 @@ public:
 	std::function<void()> OnOpen;
 	std::function<void()> OnClose;
 
+	void InitStream(uv_loop_t* loop) {
+		stream.data = this;
+		uv_tcp_init(loop, &stream);
+	}
+	uv_tcp_t* GetStream() {
+		return &stream;
+	}
+
 	void Send(std::string_view& data);
 
 	void Open();
 	void Close();
-
-	// client
-
-	void Connect(const std::string_view _host, const uint16_t _port);
-	void Disconnect();
 
 private:
 	int err;
@@ -74,8 +77,14 @@ private:
 
 		void Handle(char *buf, ssize_t buf_used);
 	} stream_read;
+};
 
-	// client
+/**
+ * ConnectorSocket
+ */
+
+class ConnectorSocket : public Socket {
+	int err;
 
 	struct AsyncData {
 		uv_loop_t* loop;
@@ -83,14 +92,21 @@ private:
 	} async_data;
 	uv_async_t async;
 
-	bool is_connect = false;
-	bool close_silently = false;
-
 	std::string addr_host;
 	uint16_t addr_port;
 
 	std::string socks5_req_addr_host;
 	uint16_t socks5_req_addr_port;
+
+	bool manually_close_flag = false;
+	bool is_connected = false;
+
+public:
+	std::function<void()> OnConnect;
+	std::function<void()> OnDisconnect;
+
+	void Connect(const std::string_view _host, const uint16_t _port);
+	void Disconnect();
 };
 
 #endif

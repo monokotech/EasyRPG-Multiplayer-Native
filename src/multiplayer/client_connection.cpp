@@ -7,7 +7,7 @@ constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
 ClientConnection::ClientConnection() {
-	socket.reset(new Socket());
+	socket.reset(new ConnectorSocket());
 }
 // ->> unused code
 ClientConnection::ClientConnection(ClientConnection&& o)
@@ -64,8 +64,8 @@ void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
 	socket->OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
-	socket->OnOpen = [this]() { HandleOpen(); };
-	socket->OnClose = [this]() { HandleClose(); };
+	socket->OnConnect = [this]() { HandleOpen(); };
+	socket->OnDisconnect = [this]() { HandleClose(); };
 	socket->Connect(addr_host, addr_port);
 	connecting = true;
 }
