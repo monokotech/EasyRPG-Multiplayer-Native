@@ -109,4 +109,32 @@ public:
 	void Disconnect();
 };
 
+/**
+ * ServerListener
+ */
+
+class ServerListener {
+	uv_loop_t loop;
+
+	struct AsyncData {
+		uv_loop_t* loop;
+		bool stop_flag;
+	} async_data;
+	uv_async_t async;
+
+	std::string addr_host;
+	uint16_t addr_port;
+
+	bool is_running = false;
+
+public:
+	ServerListener(const std::string _host, const uint16_t _port)
+		: addr_host(_host), addr_port(_port) {}
+
+	void Start(bool wait_thread = false);
+	void Stop();
+
+	std::function<void(std::unique_ptr<Socket>)> OnConnection;
+};
+
 #endif

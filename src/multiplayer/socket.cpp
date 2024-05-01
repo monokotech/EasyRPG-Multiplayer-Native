@@ -25,6 +25,22 @@
 // minetest: address.cpp Address::Resolve
 // https://stackoverflow.com/questions/25615340/closing-libuv-handles-correctly/25831688#25831688
 
+int Resolve(const std::string& address, const uint16_t port,
+		uv_loop_t* loop, struct sockaddr_storage* addr) {
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_flags = AF_UNSPEC;
+	uv_getaddrinfo_t req;
+	int err = uv_getaddrinfo(loop, &req, nullptr, address.c_str(),
+			std::to_string(port).c_str(), &hints);
+	if (req.addrinfo->ai_family == AF_INET)
+		std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in));
+	else if (req.addrinfo->ai_family == AF_INET6)
+		std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in6));
+	uv_freeaddrinfo(req.addrinfo);
+	return err;
+}
+
 /**
  * Socket
  */
@@ -58,11 +74,13 @@ void Socket::ContinueSend() {
 		if (err) {
 			Output::Debug("Error writing to the stream: {}", uv_strerror(err));
 		}
-		socket->m_send_queue.pop();
-		if (socket->m_send_queue.empty()) {
-			socket->is_sending = false;
-		} else {
-			socket->ContinueSend();
+		if (socket->is_sending) {
+			socket->m_send_queue.pop();
+			if (socket->m_send_queue.empty()) {
+				socket->is_sending = false;
+			} else {
+				socket->ContinueSend();
+			}
 		}
 	});
 }
@@ -232,19 +250,15 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 			OnDisconnect();
 		};
 
-		struct addrinfo hints;
-		memset(&hints, 0, sizeof(hints));
-		hints.ai_flags = AF_UNSPEC;
-		uv_getaddrinfo_t req;
-		err = uv_getaddrinfo(&loop, &req, nullptr, addr_host.c_str(),
-				std::to_string(addr_port).c_str(), &hints);
+		struct sockaddr_storage addr;
+		err = Resolve(addr_host, addr_port, &loop, &addr);
 		if (err < 0) {
 			Output::Warning("Address Resolve error: {}", uv_strerror(err));
 			CloseDirectly();
 			return;
 		}
 		InitStream(&loop);
-		uv_tcp_connect(&connect_req, GetStream(), req.addrinfo->ai_addr,
+		uv_tcp_connect(&connect_req, GetStream(), reinterpret_cast<struct sockaddr*>(&addr),
 				[](uv_connect_t *connect_req, int status) {
 			auto socket = static_cast<Socket*>(connect_req->data);
 			if (status < 0) {
@@ -254,7 +268,6 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 			}
 			socket->Open();
 		});
-		uv_freeaddrinfo(req.addrinfo);
 
 		uv_run(&loop, UV_RUN_DEFAULT);
 
@@ -263,8 +276,108 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 }
 
 void ConnectorSocket::Disconnect() {
+	if (!is_connected)
+		return;
 	manually_close_flag = true;
 	Close();
 	// Send a noop message to trigger the close_cb of uv_close
+	uv_async_send(&async);
+}
+
+/**
+ * ServerListener
+ */
+
+void ServerListener::Start(bool wait_thread) {
+	if (is_running)
+		return;
+	is_running = true;
+
+	std::thread thread([this]() {
+		int err;
+
+		err = uv_loop_init(&loop);
+		if (err < 0) {
+			is_running = false;
+			Output::Warning("Loop initialization error: {}", uv_strerror(err));
+			return;
+		}
+
+		async_data.loop = &loop;
+		async_data.stop_flag = false;
+		async.data = &async_data;
+
+		uv_async_init(&loop, &async, [](uv_async_t *handle) {
+			auto async_data = static_cast<AsyncData*>(handle->data);
+			if (async_data->stop_flag)
+				uv_stop(async_data->loop);
+		});
+
+		uv_tcp_t listener;
+		listener.data = this;
+
+		uv_tcp_init(&loop, &listener);
+
+		auto Cleanup = [this, &listener]() {
+			uv_close(reinterpret_cast<uv_handle_t*>(&async), nullptr);
+			uv_close(reinterpret_cast<uv_handle_t*>(&listener), nullptr);
+			uv_run(&loop, UV_RUN_DEFAULT);
+			int err = uv_loop_close(&loop);
+			if (err) {
+				Output::Warning("Close loop error: {}", uv_strerror(err));
+			}
+			is_running = false;
+		};
+
+		struct sockaddr_storage addr;
+		err = Resolve(addr_host, addr_port, &loop, &addr);
+		if (err < 0) {
+			Output::Warning("Address Resolve error: {}", uv_strerror(err));
+			Cleanup();
+			return;
+		}
+
+		err = uv_tcp_bind(&listener, reinterpret_cast<struct sockaddr*>(&addr), 0);
+		if (err) {
+			Output::Warning("Binding error: {}", uv_strerror(err));
+			Cleanup();
+			return;
+		}
+
+		err = uv_listen(reinterpret_cast<uv_stream_t*>(&listener), 4096, [](uv_stream_t *listener, int status) {
+			auto server_listener = static_cast<ServerListener*>(listener->data);
+			if (status < 0) {
+				return;
+			}
+			std::unique_ptr<Socket> socket = std::make_unique<Socket>();
+			socket.reset(new Socket());
+			socket->InitStream(&server_listener->loop);
+			if (uv_accept(listener, reinterpret_cast<uv_stream_t*>(socket->GetStream())) == 0) {
+				server_listener->OnConnection(std::move(socket));
+			} else {
+				socket->Close();
+			}
+		});
+		if (err) {
+			Output::Warning("Listen error: {}", uv_strerror(err));
+			Cleanup();
+			return;
+		}
+
+		uv_run(&loop, UV_RUN_DEFAULT);
+
+		Cleanup();
+	});
+
+	if (wait_thread)
+		thread.join();
+	else
+		thread.detach();
+}
+
+void ServerListener::Stop() {
+	if (!is_running)
+		return;
+	async_data.stop_flag = true;
 	uv_async_send(&async);
 }

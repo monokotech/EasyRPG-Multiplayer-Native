@@ -20,13 +20,10 @@ using namespace Messages;
 constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
-class TCPSocketConnection {
-};
-
 class ServerConnection : public Connection {
 	int& id;
 	ServerMain* server;
-	TCPSocketConnection tcp_socket_conn;
+	std::unique_ptr<Socket> socket;
 	std::mutex m_send_mutex;
 
 	std::queue<std::unique_ptr<Packet>> m_self_queue;
@@ -50,18 +47,25 @@ protected:
 	}
 
 public:
-	ServerConnection(int &_id, ServerMain* _server, TCPSocketConnection& _tcp_socket_conn)
+	ServerConnection(int &_id, ServerMain* _server, std::unique_ptr<Socket>& _socket)
 			: id(_id), server(_server) {
+		socket = std::move(_socket);
 	}
 
 	void Open() override {
+		socket->OnData = [this](const auto p1, const auto p2) { HandleData(p1, p2); };
+		socket->OnOpen = [this]() { HandleOpen(); };
+		socket->OnClose = [this]() { HandleClose(); };
+		socket->Open();
 	}
 
 	void Close() override {
+		socket->Close();
 	}
 
 	void Send(std::string_view data) override {
 		std::lock_guard lock(m_send_mutex);
+		socket->Send(data); // send to self
 	}
 
 	template<typename T>
@@ -388,9 +392,9 @@ class ServerSideClient {
 	}
 
 public:
-	ServerSideClient(ServerMain* _server, int _id, TCPSocketConnection& _tcp_socket_conn)
+	ServerSideClient(ServerMain* _server, int _id, std::unique_ptr<Socket> _socket)
 			: server(_server), id(_id),
-			connection(ServerConnection(id, _server, _tcp_socket_conn)) {
+			connection(ServerConnection(id, _server, _socket)) {
 		InitConnection();
 	}
 
@@ -450,10 +454,7 @@ void ServerMain::SendTo(const int& from_client_id, const int& to_client_id,
 	}
 }
 
-ServerMain::ServerMain() {
-}
-
-void ServerMain::Start(bool blocking) {
+void ServerMain::Start(bool wait_thread) {
 	if (running) return;
 	running = true;
 
@@ -466,6 +467,7 @@ void ServerMain::Start(bool blocking) {
 			// stop the thread
 			if (data_entry->from_client_id == 0 &&
 					data_entry->visibility == Messages::CV_NULL) {
+				m_message_data_queue.pop();
 				break;
 			}
 			// check if the client is online
@@ -501,18 +503,27 @@ void ServerMain::Start(bool blocking) {
 		}
 	}).detach();
 
-	auto CreateServerSideClient = [this](TCPSocketConnection& tcp_socket_conn) {
+	auto CreateServerSideClient = [this](std::unique_ptr<Socket> socket) {
 		if (clients.size() >= cfg.server_max_users.Get()) {
 			std::string_view data = "\uFFFD1";
+			socket->Send(data);
+			socket->Close();
 		} else {
 			auto& client = clients[client_id];
-			client.reset(new ServerSideClient(this, client_id++, tcp_socket_conn));
+			client.reset(new ServerSideClient(this, client_id++, std::move(socket)));
 			client->Open();
 		}
 	};
 
-	if (cfg.server_bind_address_v6.Get() != "") {
+	if (cfg.server_bind_address_2.Get() != "") {
+		server_listener_2.reset(new ServerListener(addr_host_2, addr_port_2));
+		server_listener_2->OnConnection = CreateServerSideClient;
+		server_listener_2->Start();
 	}
+
+	server_listener.reset(new ServerListener(addr_host, addr_port));
+	server_listener->OnConnection = CreateServerSideClient;
+	server_listener->Start(wait_thread);
 }
 
 void ServerMain::Stop() {
@@ -524,6 +535,8 @@ void ServerMain::Stop() {
 		it.second->Send("\uFFFD0");
 		it.second->Close();
 	}
+	server_listener->Stop();
+	server_listener_2->Stop();
 	// stop message queue loop
 	m_message_data_queue.emplace(new MessageDataEntry{ 0, 0, Messages::CV_NULL, "" });
 	m_message_data_queue_cv.notify_one();
@@ -533,8 +546,8 @@ void ServerMain::Stop() {
 void ServerMain::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 	cfg = _cfg;
 	Connection::ParseAddress(cfg.server_bind_address.Get(), addr_host, addr_port);
-	if (cfg.server_bind_address_v6.Get() != "")
-		Connection::ParseAddress(cfg.server_bind_address_v6.Get(), addr_host_v6, addr_port_v6);
+	if (cfg.server_bind_address_2.Get() != "")
+		Connection::ParseAddress(cfg.server_bind_address_2.Get(), addr_host_2, addr_port_2);
 }
 
 Game_ConfigMultiplayer ServerMain::GetConfig() const {
@@ -556,7 +569,7 @@ int main(int argc, char *argv[])
 	const char* short_opts = "a:A:nc:";
 	const option long_opts[] = {
 		{"bind-address", required_argument, nullptr, 'a'},
-		{"bind-address-v6", required_argument, nullptr, 'A'},
+		{"bind-address-2", required_argument, nullptr, 'A'},
 		{"no-heartbeats", no_argument, nullptr, 'n'},
 		{"config-path", required_argument, nullptr, 'c'},
 		{nullptr, no_argument, nullptr, 0}
@@ -567,7 +580,7 @@ int main(int argc, char *argv[])
 		if (opt == 'a')
 			cfg.server_bind_address.Set(std::string(optarg));
 		else if (opt == 'A')
-			cfg.server_bind_address_v6.Set(std::string(optarg));
+			cfg.server_bind_address_2.Set(std::string(optarg));
 		else if (opt == 'n')
 			cfg.no_heartbeats.Set(true);
 		else if (opt == 'c')
@@ -583,7 +596,7 @@ int main(int argc, char *argv[])
 		std::istream& is = ifs;
 		lcf::INIReader ini(is);
 		cfg.server_bind_address.FromIni(ini);
-		cfg.server_bind_address_v6.FromIni(ini);
+		cfg.server_bind_address_2.FromIni(ini);
 		cfg.server_max_users.FromIni(ini);
 		cfg.server_picture_names.FromIni(ini);
 		cfg.server_picture_prefixes.FromIni(ini);
