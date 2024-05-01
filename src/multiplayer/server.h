@@ -9,6 +9,7 @@
 #include "messages.h"
 #include "../game_config.h"
 
+class ServerListener;
 class ServerSideClient;
 
 class ServerMain {
@@ -18,10 +19,13 @@ class ServerMain {
 	int client_id = 10;
 	std::map<int, std::unique_ptr<ServerSideClient>> clients;
 
+	std::unique_ptr<ServerListener> server_listener;
+	std::unique_ptr<ServerListener> server_listener_2;
+
 	std::string addr_host;
-	std::string addr_host_v6;
+	std::string addr_host_2;
 	uint16_t addr_port{ 6500 };
-	uint16_t addr_port_v6{ 6500 };
+	uint16_t addr_port_2{ 6500 };
 
 	std::queue<std::unique_ptr<MessageDataEntry>> m_message_data_queue;
 	std::condition_variable m_message_data_queue_cv;
@@ -31,9 +35,7 @@ class ServerMain {
 	Game_ConfigMultiplayer cfg;
 
 public:
-	ServerMain();
-
-	void Start(bool blocking = false);
+	void Start(bool wait_thread = false);
 	void Stop();
 
 	void SetConfig(const Game_ConfigMultiplayer& _cfg);

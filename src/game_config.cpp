@@ -344,10 +344,10 @@ void Game_Config::LoadFromArgs(CmdlineParser& cp) {
 			}
 			continue;
 		}
-		if (cp.ParseNext(arg, 1, "--bind-address-v6")) {
+		if (cp.ParseNext(arg, 1, "--bind-address-2")) {
 			std::string svalue;
 			if (arg.ParseValue(0, svalue)) {
-				multiplayer.server_bind_address_v6.Set(std::move(svalue));
+				multiplayer.server_bind_address_2.Set(std::move(svalue));
 			}
 			continue;
 		}
@@ -449,7 +449,7 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
 	/** MULTIPLAYER SECTION */
 	multiplayer.server_auto_start.FromIni(ini);
 	multiplayer.server_bind_address.FromIni(ini);
-	multiplayer.server_bind_address_v6.FromIni(ini);
+	multiplayer.server_bind_address_2.FromIni(ini);
 	multiplayer.server_max_users.FromIni(ini);
 	multiplayer.server_picture_names.FromIni(ini);
 	multiplayer.server_picture_prefixes.FromIni(ini);
@@ -545,7 +545,7 @@ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
 	os << "[Multiplayer]\n";
 	multiplayer.server_auto_start.ToIni(os);
 	multiplayer.server_bind_address.ToIni(os);
-	multiplayer.server_bind_address_v6.ToIni(os);
+	multiplayer.server_bind_address_2.ToIni(os);
 	multiplayer.server_max_users.ToIni(os);
 	multiplayer.server_picture_names.ToIni(os);
 	multiplayer.server_picture_prefixes.ToIni(os);
