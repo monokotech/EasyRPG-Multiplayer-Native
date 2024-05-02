@@ -46,24 +46,23 @@ void ClientConnection::HandleClose() {
 	m_system_queue.push(SystemMessage::CLOSE);
 }
 
-void ClientConnection::HandleData(const char* data, const size_t& num_bytes) {
-	std::string_view _data(reinterpret_cast<const char*>(data), num_bytes);
+void ClientConnection::HandleData(std::string_view data) {
 	std::lock_guard lock(m_receive_mutex);
-	if (_data.size() == 4 && _data.substr(0, 3) == "\uFFFD") {
-		std::string_view code = _data.substr(3, 1);
+	if (data.size() == 4 && data.substr(0, 3) == "\uFFFD") {
+		std::string_view code = data.substr(3, 1);
 		if (code == "0")
 			m_system_queue.push(SystemMessage::EXIT);
 		else if (code == "1")
 			m_system_queue.push(SystemMessage::ACCESSDENIED_TOO_MANY_USERS);
 		return;
 	}
-	m_data_queue.push(std::move(std::string(_data)));
+	m_data_queue.push(std::move(std::string(data)));
 }
 
 void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
-	socket->OnData = [this](auto p1, auto& p2) { HandleData(p1, p2); };
+	socket->OnData = [this](auto p1) { HandleData(p1); };
 	socket->OnConnect = [this]() { HandleOpen(); };
 	socket->OnDisconnect = [this]() { HandleClose(); };
 	socket->Connect(addr_host, addr_port);
@@ -114,10 +113,10 @@ void ClientConnection::FlushQueue() {
 	while (!m_queue.empty()) {
 		std::string bulk;
 		while (!m_queue.empty()) {
-			auto& e = m_queue.front();
+			const auto& e = m_queue.front();
 			if (namecmp(e->GetName(), include))
 				break;
-			auto data = e->ToBytes();
+			std::string data = std::move(e->ToBytes());
 			// prevent overflow
 			if (bulk.size() + data.size() > MAX_BULK_SIZE) {
 				Send(bulk);

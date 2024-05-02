@@ -21,8 +21,9 @@ constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
 class ServerConnection : public Connection {
-	int& id;
+	const int& id;
 	ServerMain* server;
+
 	std::unique_ptr<Socket> socket;
 
 	std::queue<std::unique_ptr<Packet>> m_self_queue;
@@ -30,9 +31,8 @@ class ServerConnection : public Connection {
 	std::queue<std::unique_ptr<Packet>> m_global_queue;
 
 protected:
-	void HandleData(const char* data, const ssize_t& num_bytes) {
-		std::string_view _data(reinterpret_cast<const char*>(data), num_bytes);
-		DispatchMessages(std::move(_data));
+	void HandleData(std::string_view data) {
+		DispatchMessages(data);
 		DispatchSystem(SystemMessage::EOM);
 	}
 
@@ -46,13 +46,13 @@ protected:
 	}
 
 public:
-	ServerConnection(int &_id, ServerMain* _server, std::unique_ptr<Socket>& _socket)
+	ServerConnection(const int& _id, ServerMain* _server, std::unique_ptr<Socket>& _socket)
 			: id(_id), server(_server) {
 		socket = std::move(_socket);
 	}
 
 	void Open() override {
-		socket->OnData = [this](const auto p1, const auto p2) { HandleData(p1, p2); };
+		socket->OnData = [this](auto p1) { HandleData(p1); };
 		socket->OnOpen = [this]() { HandleOpen(); };
 		socket->OnClose = [this]() { HandleClose(); };
 		socket->Open();
@@ -93,8 +93,8 @@ public:
 			const VisibilityType& visibility, bool self = false) {
 		std::string bulk;
 		while (!queue.empty()) {
-			auto& e = queue.front();
-			auto data = e->ToBytes();
+			const auto& e = queue.front();
+			std::string data = std::move(e->ToBytes());
 			if (bulk.size() + data.size() > MAX_BULK_SIZE) {
 				if (self)
 					Send(bulk);
@@ -126,7 +126,7 @@ public:
  * Clients
  */
 
-struct ServerMain::MessageDataEntry {
+struct ServerMain::DataToSend {
 	int from_client_id;
 	int to_client_id;
 	VisibilityType visibility;
@@ -160,7 +160,7 @@ class ServerSideClient {
 	LastState last;
 
 	void SendSelfRoomInfoAsync() {
-		server->ForEachClient([this](ServerSideClient& other) {
+		server->ForEachClient([this](const ServerSideClient& other) {
 			if (other.id == id || other.room_id != room_id)
 				return;
 			SendSelfAsync(JoinPacket(other.id));
@@ -442,12 +442,12 @@ void ServerMain::SendTo(const int& from_client_id, const int& to_client_id,
 		const VisibilityType& visibility, const std::string& data,
 		const bool& return_flag) {
 	if (!running) return;
-	auto data_entry = new MessageDataEntry{ from_client_id, to_client_id, visibility, data,
+	auto data_to_send = new DataToSend{ from_client_id, to_client_id, visibility, data,
 			return_flag };
 	{
 		std::lock_guard lock(m_mutex);
-		m_message_data_queue.emplace(data_entry);
-		m_message_data_queue_cv.notify_one();
+		m_data_to_send_queue.emplace(data_to_send);
+		m_data_to_send_queue_cv.notify_one();
 	}
 }
 
@@ -458,45 +458,45 @@ void ServerMain::Start(bool wait_thread) {
 	std::thread([this]() {
 		while (running) {
 			std::unique_lock<std::mutex> lock(m_mutex);
-			m_message_data_queue_cv.wait(lock, [this] {
-					return !m_message_data_queue.empty(); });
-			auto& data_entry = m_message_data_queue.front();
+			m_data_to_send_queue_cv.wait(lock, [this] {
+					return !m_data_to_send_queue.empty(); });
+			auto& data_to_send = m_data_to_send_queue.front();
 			// stop the thread
-			if (data_entry->from_client_id == 0 &&
-					data_entry->visibility == Messages::CV_NULL) {
-				m_message_data_queue.pop();
+			if (data_to_send->from_client_id == 0 &&
+					data_to_send->visibility == Messages::CV_NULL) {
+				m_data_to_send_queue.pop();
 				break;
 			}
 			// check if the client is online
 			ServerSideClient* from_client = nullptr;
-			const auto& from_client_it = clients.find(data_entry->from_client_id);
+			const auto& from_client_it = clients.find(data_to_send->from_client_id);
 			if (from_client_it != clients.end()) {
 				from_client = from_client_it->second.get();
 			}
 			// send to global, local and crypt
-			if (data_entry->to_client_id == 0) {
+			if (data_to_send->to_client_id == 0) {
 				// enter on every client
 				for (const auto& it : clients) {
 					auto& to_client = it.second;
 					// exclude self
-					if (!data_entry->return_flag &&
-							data_entry->from_client_id == to_client->GetId())
+					if (!data_to_send->return_flag &&
+							data_to_send->from_client_id == to_client->GetId())
 						continue;
 					// send to local
-					if (data_entry->visibility == Messages::CV_LOCAL &&
+					if (data_to_send->visibility == Messages::CV_LOCAL &&
 							from_client && from_client->GetRoomId() == to_client->GetRoomId()) {
-						to_client->Send(data_entry->data);
+						to_client->Send(data_to_send->data);
 					// send to crypt
-					} else if (data_entry->visibility == Messages::CV_CRYPT &&
+					} else if (data_to_send->visibility == Messages::CV_CRYPT &&
 							from_client && from_client->GetChatCryptKeyHash() == to_client->GetChatCryptKeyHash()) {
-						to_client->Send(data_entry->data);
+						to_client->Send(data_to_send->data);
 					// send to global
-					} else if (data_entry->visibility == Messages::CV_GLOBAL) {
-						to_client->Send(data_entry->data);
+					} else if (data_to_send->visibility == Messages::CV_GLOBAL) {
+						to_client->Send(data_to_send->data);
 					}
 				}
 			}
-			m_message_data_queue.pop();
+			m_data_to_send_queue.pop();
 		}
 	}).detach();
 
@@ -533,11 +533,12 @@ void ServerMain::Stop() {
 		// the client will be removed from HandleClose
 		it.second->Close();
 	}
+	if (server_listener_2)
+		server_listener_2->Stop();
 	server_listener->Stop();
-	server_listener_2->Stop();
-	// stop message queue loop
-	m_message_data_queue.emplace(new MessageDataEntry{ 0, 0, Messages::CV_NULL, "" });
-	m_message_data_queue_cv.notify_one();
+	// stop sending loop
+	m_data_to_send_queue.emplace(new DataToSend{ 0, 0, Messages::CV_NULL, "" });
+	m_data_to_send_queue_cv.notify_one();
 	Output::Debug("Server: Stopped");
 }
 

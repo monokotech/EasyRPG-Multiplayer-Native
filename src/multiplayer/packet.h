@@ -16,7 +16,7 @@ public:
 	virtual ~Packet() = default;
 	virtual std::string ToBytes() const;
 
-	Packet(const std::string_view& _packet_name) : packet_name(_packet_name) {}
+	Packet(std::string_view _packet_name) : packet_name(_packet_name) {}
 	std::string_view GetName() const { return packet_name; }
 
 	static std::string Sanitize(std::string_view param);
