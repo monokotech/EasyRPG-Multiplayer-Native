@@ -46,6 +46,7 @@ protected:
 	uint16_t addr_port{ 6500 };
 	std::string socks5_addr_host;
 	uint16_t socks5_addr_port{ 1080 };
+
 	std::unique_ptr<ConnectorSocket> socket;
 
 	bool connecting = false;
@@ -59,7 +60,7 @@ protected:
 
 	void HandleOpen();
 	void HandleClose();
-	void HandleData(const char* data, const size_t& num_bytes);
+	void HandleData(std::string_view);
 };
 
 #endif

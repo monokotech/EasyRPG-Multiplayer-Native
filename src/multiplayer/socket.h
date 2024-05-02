@@ -46,7 +46,7 @@ public:
 
 	std::function<void()> OnOpen;
 	std::function<void()> OnClose;
-	std::function<void(const char*, const size_t&)> OnData;
+	std::function<void(std::string_view data)> OnData;
 
 	void InitStream(uv_loop_t* loop);
 
@@ -54,12 +54,15 @@ public:
 		return &stream;
 	}
 
-	void Send(std::string_view& data);
+	void Send(std::string_view data);
 	void Open();
 	void Close();
 
 private:
-	int err;
+	void InternalOnData(const char* buf, const ssize_t num_bytes) {
+		std::string_view data(reinterpret_cast<const char*>(buf), num_bytes);
+		OnData(data);
+	}
 
 	std::mutex m_call_mutex;
 	std::queue<AsyncCall> m_request_queue;
@@ -100,8 +103,6 @@ private:
  */
 
 class ConnectorSocket : public Socket {
-	int err;
-
 	struct AsyncData {
 		bool stop_flag;
 	} async_data;
@@ -113,7 +114,7 @@ class ConnectorSocket : public Socket {
 	std::string socks5_req_addr_host;
 	uint16_t socks5_req_addr_port;
 
-	bool manually_close_flag = false;
+	bool manually_close_flag;
 	bool is_connect = false;
 
 public:
@@ -142,7 +143,7 @@ class ServerListener {
 	bool is_running = false;
 
 public:
-	ServerListener(const std::string _host, const uint16_t _port)
+	ServerListener(std::string_view _host, const uint16_t _port)
 		: addr_host(_host), addr_port(_port) {}
 
 	void Start(bool wait_thread = false);

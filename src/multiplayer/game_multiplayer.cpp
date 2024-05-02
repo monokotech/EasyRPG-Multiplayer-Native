@@ -146,8 +146,8 @@ void Game_Multiplayer::InitConnection() {
 		Disconnect();
 	});
 	connection.RegisterSystemHandler(SystemMessage::ACCESSDENIED_TOO_MANY_USERS, [this](Connection& _) {
-		Disconnect();
 		CUI().GotInfo("!! Access denied. Too many users");
+		Disconnect();
 	});
 
 	auto SetGlobalPlayersSystem = [this](int id, std::string& sys_name, bool replace) {

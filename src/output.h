@@ -204,6 +204,7 @@ inline std::string output_time() {
 	std::time_t t = std::time(nullptr);
 	return Utils::FormatDate(std::localtime(&t), "[%Y-%m-%d %H:%M:%S] ");
 }
+
 template <typename FmtStr, typename... Args>
 inline void Output::Info(FmtStr&& fmtstr, Args&&... args) {
 	std::cout << output_time() << "Info: "

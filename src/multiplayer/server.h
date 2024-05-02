@@ -13,7 +13,7 @@ class ServerListener;
 class ServerSideClient;
 
 class ServerMain {
-	struct MessageDataEntry;
+	struct DataToSend;
 
 	bool running = false;
 	int client_id = 10;
@@ -27,8 +27,8 @@ class ServerMain {
 	uint16_t addr_port{ 6500 };
 	uint16_t addr_port_2{ 6500 };
 
-	std::queue<std::unique_ptr<MessageDataEntry>> m_message_data_queue;
-	std::condition_variable m_message_data_queue_cv;
+	std::queue<std::unique_ptr<DataToSend>> m_data_to_send_queue;
+	std::condition_variable m_data_to_send_queue_cv;
 
 	std::mutex m_mutex;
 

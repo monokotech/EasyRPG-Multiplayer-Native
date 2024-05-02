@@ -21,9 +21,19 @@
 #include "socket.h"
 #include "connection.h"
 
-// node-main: inspector_socket_server.cc: InspectorSocketServer::Start
-// minetest: address.cpp Address::Resolve
-// https://stackoverflow.com/questions/25615340/closing-libuv-handles-correctly/25831688#25831688
+/**
+ * libuv examples:
+ * https://github.com/kurotych/libuv-echo-server master:a25a369
+ * https://github.com/cm-MMK-2/MTcpServer master:48ae4e6
+ *
+ * name resolver:
+ * nodejs: master:b876e00 inspector_socket_server.cc: InspectorSocketServer::Start
+ * minetest: 5.7.0:1b95998 address.cpp Address::Resolve
+ *
+ * misc stuff:
+ * https://stackoverflow.com/questions/25615340/closing-libuv-handles-correctly/25831688#25831688
+ * https://stackoverflow.com/questions/56720702/call-uv-write-from-multi-thread-its-callback-never-get-called
+ */
 
 int Resolve(const std::string& address, const uint16_t port,
 		uv_loop_t* loop, struct sockaddr_storage* addr) {
@@ -81,7 +91,7 @@ void Socket::InitStream(uv_loop_t* loop) {
 	is_initialized = true;
 }
 
-void Socket::Send(std::string_view& data) {
+void Socket::Send(std::string_view data) {
 	std::lock_guard lock(m_call_mutex);
 
 	if (!is_initialized || m_send_queue.size() > 100)
@@ -99,7 +109,7 @@ void Socket::Send(std::string_view& data) {
 }
 
 void Socket::InternalSend() {
-	auto& vec_buf = m_send_queue.front();
+	const auto& vec_buf = m_send_queue.front();
 	uv_buf_t buf = uv_buf_init(vec_buf->data(), vec_buf->size());
 	uv_write(&send_req, reinterpret_cast<uv_stream_t*>(&stream), &buf, 1,
 			[](uv_write_t* req, int err) {
@@ -133,7 +143,7 @@ void Socket::StreamRead::Handle(char *buf, ssize_t buf_used) {
 				if (data_remaining <= tmp_buf_remaining) {
 					if (data_remaining <= buf_remaining) {
 						std::memcpy(tmp_buf+tmp_buf_used, buf+begin, data_remaining);
-						socket->OnData(tmp_buf, data_size);
+						socket->InternalOnData(tmp_buf, data_size);
 						begin += data_remaining;
 					} else {
 						if (buf_remaining > 0) {
@@ -169,7 +179,7 @@ void Socket::StreamRead::Handle(char *buf, ssize_t buf_used) {
 				got_head = true;
 			// Data can be taken out from buf_remaining
 			} else if (got_head && data_size <= buf_remaining) {
-				socket->OnData(buf+begin, data_size);
+				socket->InternalOnData(buf+begin, data_size);
 				begin += data_size;
 				got_head = false;
 				data_size = 0;
@@ -248,6 +258,8 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 		return;
 	is_connect = true;
 
+	manually_close_flag = false;
+
 	addr_host = _host;
 	addr_port = _port;
 
@@ -261,6 +273,8 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 	};
 
 	std::thread([this]() {
+		int err;
+
 		uv_loop_t loop;
 		uv_connect_t connect_req;
 
@@ -286,7 +300,7 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 			uv_close(reinterpret_cast<uv_handle_t*>(&async), nullptr);
 			uv_run(&loop, UV_RUN_DEFAULT); // update state
 			// everying is done, reverse the uv_loop_init
-			err = uv_loop_close(&loop);
+			int err = uv_loop_close(&loop);
 			if (err) {
 				Output::Warning("Close loop error: {}", uv_strerror(err));
 			}
