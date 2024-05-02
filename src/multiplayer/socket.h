@@ -24,6 +24,7 @@
 #include <cstring>
 #include <memory>
 #include <queue>
+#include <mutex>
 #include "uv.h"
 
 /**
@@ -37,25 +38,36 @@ public:
 
 	Socket();
 
-	std::function<void(const char*, const size_t&)> OnData;
+	enum class AsyncCall {
+		SEND,
+		OPEN,
+		CLOSE,
+	};
+
 	std::function<void()> OnOpen;
 	std::function<void()> OnClose;
+	std::function<void(const char*, const size_t&)> OnData;
 
-	void InitStream(uv_loop_t* loop) {
-		stream.data = this;
-		uv_tcp_init(loop, &stream);
-	}
+	void InitStream(uv_loop_t* loop);
+
 	uv_tcp_t* GetStream() {
 		return &stream;
 	}
 
 	void Send(std::string_view& data);
-
 	void Open();
 	void Close();
 
 private:
 	int err;
+
+	std::mutex m_call_mutex;
+	std::queue<AsyncCall> m_request_queue;
+
+	struct AsyncData {
+		Socket *socket;
+	} async_data;
+	uv_async_t async;
 
 	uv_tcp_t stream;
 	uv_write_t send_req;
@@ -64,7 +76,11 @@ private:
 	std::queue<std::unique_ptr<std::vector<char>>> m_send_queue;
 	bool is_sending = false;
 
-	void ContinueSend();
+	bool is_initialized = false;
+
+	void InternalOpen();
+	void InternalClose();
+	void InternalSend();
 
 	struct StreamRead {
 		Socket *socket;
@@ -87,7 +103,6 @@ class ConnectorSocket : public Socket {
 	int err;
 
 	struct AsyncData {
-		uv_loop_t* loop;
 		bool stop_flag;
 	} async_data;
 	uv_async_t async;
@@ -99,7 +114,7 @@ class ConnectorSocket : public Socket {
 	uint16_t socks5_req_addr_port;
 
 	bool manually_close_flag = false;
-	bool is_connected = false;
+	bool is_connect = false;
 
 public:
 	std::function<void()> OnConnect;
@@ -117,7 +132,6 @@ class ServerListener {
 	uv_loop_t loop;
 
 	struct AsyncData {
-		uv_loop_t* loop;
 		bool stop_flag;
 	} async_data;
 	uv_async_t async;

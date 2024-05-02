@@ -24,7 +24,6 @@ class ServerConnection : public Connection {
 	int& id;
 	ServerMain* server;
 	std::unique_ptr<Socket> socket;
-	std::mutex m_send_mutex;
 
 	std::queue<std::unique_ptr<Packet>> m_self_queue;
 	std::queue<std::unique_ptr<Packet>> m_local_queue;
@@ -64,7 +63,6 @@ public:
 	}
 
 	void Send(std::string_view data) override {
-		std::lock_guard lock(m_send_mutex);
 		socket->Send(data); // send to self
 	}
 
@@ -436,7 +434,6 @@ void ServerMain::ForEachClient(const std::function<void(ServerSideClient&)>& cal
 }
 
 void ServerMain::DeleteClient(const int& id) {
-	if (!running) return;
 	std::lock_guard lock(m_mutex);
 	clients.erase(id);
 }
@@ -533,6 +530,7 @@ void ServerMain::Stop() {
 	running = false;
 	for (const auto& it : clients) {
 		it.second->Send("\uFFFD0");
+		// the client will be removed from HandleClose
 		it.second->Close();
 	}
 	server_listener->Stop();

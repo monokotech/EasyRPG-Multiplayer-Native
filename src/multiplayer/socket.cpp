@@ -50,22 +50,55 @@ Socket::Socket() {
 	send_req.data = this;
 }
 
+void Socket::InitStream(uv_loop_t* loop) {
+	stream.data = this;
+	async_data.socket = this;
+	async.data = &async_data;
+	uv_async_init(loop, &async, [](uv_async_t *handle) {
+		auto async_data = static_cast<AsyncData*>(handle->data);
+		auto socket = async_data->socket;
+		std::lock_guard lock(socket->m_call_mutex);
+		while (!socket->m_request_queue.empty()) {
+			switch (socket->m_request_queue.front()) {
+			case AsyncCall::SEND:
+				if (!socket->is_sending &&
+						!socket->m_send_queue.empty()) {
+					socket->is_sending = true;
+					socket->InternalSend();
+				}
+				break;
+			case AsyncCall::OPEN:
+				socket->InternalOpen();
+				break;
+			case AsyncCall::CLOSE:
+				socket->InternalClose();
+				break;
+			}
+			socket->m_request_queue.pop();
+		}
+	});
+	uv_tcp_init(loop, &stream);
+	is_initialized = true;
+}
+
 void Socket::Send(std::string_view& data) {
-	if (m_send_queue.size() > 100)
+	std::lock_guard lock(m_call_mutex);
+
+	if (!is_initialized || m_send_queue.size() > 100)
 		return;
+
 	const uint16_t data_size = data.size();
 	const uint16_t final_size = HEAD_SIZE+data_size;
 	auto buf = new std::vector<char>(final_size);
 	std::memcpy(buf->data(), &data_size, HEAD_SIZE);
 	std::memcpy(buf->data()+HEAD_SIZE, data.data(), data_size);
 	m_send_queue.emplace(buf);
-	if (!is_sending) {
-		is_sending = true;
-		ContinueSend();
-	}
+
+	m_request_queue.push(AsyncCall::SEND);
+	uv_async_send(&async);
 }
 
-void Socket::ContinueSend() {
+void Socket::InternalSend() {
 	auto& vec_buf = m_send_queue.front();
 	uv_buf_t buf = uv_buf_init(vec_buf->data(), vec_buf->size());
 	uv_write(&send_req, reinterpret_cast<uv_stream_t*>(&stream), &buf, 1,
@@ -79,7 +112,7 @@ void Socket::ContinueSend() {
 			if (socket->m_send_queue.empty()) {
 				socket->is_sending = false;
 			} else {
-				socket->ContinueSend();
+				socket->InternalSend();
 			}
 		}
 	});
@@ -157,7 +190,12 @@ void Socket::StreamRead::Handle(char *buf, ssize_t buf_used) {
 }
 
 void Socket::Open() {
-	OnOpen();
+	std::lock_guard lock(m_call_mutex);
+	m_request_queue.push(AsyncCall::OPEN);
+	uv_async_send(&async);
+}
+
+void Socket::InternalOpen() {
 	uv_read_start(reinterpret_cast<uv_stream_t*>(&stream),
 			[](uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
 		buf->base = new char[BUFFER_SIZE];
@@ -169,7 +207,7 @@ void Socket::Open() {
 			if (nread != UV_EOF) {
 				Output::Warning("Read error: {}", uv_strerror(nread));
 			}
-			socket->Close();
+			socket->InternalClose();
 		} else if (nread > 0) {
 			stream_read.Handle(buf->base, nread);
 		}
@@ -177,13 +215,24 @@ void Socket::Open() {
 			delete[] buf->base;
 		}
 	});
+	OnOpen();
 }
 
 void Socket::Close() {
+	std::lock_guard lock(m_call_mutex);
+	if (!is_initialized)
+		return;
+	m_request_queue.push(AsyncCall::CLOSE);
+	uv_async_send(&async);
+}
+
+void Socket::InternalClose() {
 	if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)))
 		return;
 	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
+		uv_close(reinterpret_cast<uv_handle_t*>(&socket->async), nullptr);
+		socket->is_initialized = false;
 		socket->m_send_queue = decltype(m_send_queue){};
 		socket->is_sending = false;
 		socket->OnClose();
@@ -195,9 +244,9 @@ void Socket::Close() {
  */
 
 void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port) {
-	if (is_connected)
+	if (is_connect)
 		return;
-	is_connected = true;
+	is_connect = true;
 
 	addr_host = _host;
 	addr_port = _port;
@@ -219,18 +268,18 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 
 		err = uv_loop_init(&loop);
 		if (err < 0) {
+			is_connect = false;
 			Output::Warning("Loop initialization error: {}", uv_strerror(err));
 			return;
 		}
 
-		async_data.loop = &loop;
 		async_data.stop_flag = false;
 		async.data = &async_data;
 
 		uv_async_init(&loop, &async, [](uv_async_t *handle) {
 			auto async_data = static_cast<AsyncData*>(handle->data);
 			if (async_data->stop_flag)
-				uv_stop(async_data->loop);
+				uv_stop(handle->loop);
 		});
 
 		auto Cleanup = [this, &loop]() {
@@ -241,7 +290,7 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 			if (err) {
 				Output::Warning("Close loop error: {}", uv_strerror(err));
 			}
-			is_connected = false;
+			is_connect = false;
 		};
 
 		// Call this if not connected
@@ -276,12 +325,8 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 }
 
 void ConnectorSocket::Disconnect() {
-	if (!is_connected)
-		return;
 	manually_close_flag = true;
 	Close();
-	// Send a noop message to trigger the close_cb of uv_close
-	uv_async_send(&async);
 }
 
 /**
@@ -303,14 +348,13 @@ void ServerListener::Start(bool wait_thread) {
 			return;
 		}
 
-		async_data.loop = &loop;
 		async_data.stop_flag = false;
 		async.data = &async_data;
 
 		uv_async_init(&loop, &async, [](uv_async_t *handle) {
 			auto async_data = static_cast<AsyncData*>(handle->data);
 			if (async_data->stop_flag)
-				uv_stop(async_data->loop);
+				uv_stop(handle->loop);
 		});
 
 		uv_tcp_t listener;
