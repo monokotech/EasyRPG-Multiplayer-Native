@@ -46,6 +46,7 @@ public:
 
 	std::function<void()> OnOpen;
 	std::function<void()> OnClose;
+	std::function<void(const char*, const size_t)> OnRawData;
 	std::function<void(std::string_view data)> OnData;
 
 	void InitStream(uv_loop_t* loop);
@@ -54,6 +55,11 @@ public:
 		return &stream;
 	}
 
+	void SetReadTimeout(uint16_t _read_timeout_ms) {
+		read_timeout_ms = _read_timeout_ms;
+	}
+
+	void SendRaw(const char*, const size_t);
 	void Send(std::string_view data);
 	void Open();
 	void Close();
@@ -74,6 +80,9 @@ private:
 
 	uv_tcp_t stream;
 	uv_write_t send_req;
+	uv_timer_t read_timeout_req;
+
+	uint64_t read_timeout_ms = 0;
 
 	// use queue: buffers must remain valid while sending
 	std::queue<std::unique_ptr<std::vector<char>>> m_send_queue;
@@ -111,6 +120,11 @@ class ConnectorSocket : public Socket {
 	std::string addr_host;
 	uint16_t addr_port;
 
+	enum class SOCKS5_STEP : std::uint8_t {
+		SS_GREETING = 1,
+		SS_CONNECTIONREQUEST,
+	};
+	SOCKS5_STEP socks5_step;
 	std::string socks5_req_addr_host;
 	uint16_t socks5_req_addr_port;
 
@@ -121,7 +135,12 @@ public:
 	std::function<void()> OnConnect;
 	std::function<void()> OnDisconnect;
 
-	void Connect(const std::string_view _host, const uint16_t _port);
+	void SetRemoteAddress(std::string_view host, const uint16_t port);
+
+	// Must call after SetRemoteAddress
+	void ConfigSocks5(std::string_view host, const uint16_t port);
+
+	void Connect();
 	void Disconnect();
 };
 

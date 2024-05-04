@@ -55,6 +55,7 @@ public:
 		socket->OnData = [this](auto p1) { HandleData(p1); };
 		socket->OnOpen = [this]() { HandleOpen(); };
 		socket->OnClose = [this]() { HandleClose(); };
+		socket->SetReadTimeout(server->GetConfig().no_heartbeats.Get() ? 0 : 6000);
 		socket->Open();
 	}
 

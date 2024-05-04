@@ -20,6 +20,7 @@
 #include <vector>
 #include "socket.h"
 #include "connection.h"
+#include "socks5.h"
 
 /**
  * libuv examples:
@@ -88,7 +89,23 @@ void Socket::InitStream(uv_loop_t* loop) {
 		}
 	});
 	uv_tcp_init(loop, &stream);
+	read_timeout_req.data = this;
+	uv_timer_init(loop, &read_timeout_req);
 	is_initialized = true;
+}
+
+void Socket::SendRaw(const char* raw_buf, const size_t raw_size) {
+	std::lock_guard lock(m_call_mutex);
+
+	if (!is_initialized || m_send_queue.size() > 100)
+		return;
+
+	auto buf = new std::vector<char>(raw_size);
+	std::memcpy(buf->data(), raw_buf, raw_size);
+	m_send_queue.emplace(buf);
+
+	m_request_queue.push(AsyncCall::SEND);
+	uv_async_send(&async);
 }
 
 void Socket::Send(std::string_view data) {
@@ -219,12 +236,25 @@ void Socket::InternalOpen() {
 			}
 			socket->InternalClose();
 		} else if (nread > 0) {
-			stream_read.Handle(buf->base, nread);
+			if (socket->OnRawData) {
+				socket->OnRawData(buf->base, nread);
+			} else {
+				stream_read.Handle(buf->base, nread);
+			}
 		}
 		if (buf->base) {
 			delete[] buf->base;
 		}
+		if (socket->read_timeout_ms > 0)
+			uv_timer_again(&socket->read_timeout_req);
 	});
+	if (read_timeout_ms > 0) {
+		uv_timer_start(&read_timeout_req, [](uv_timer_t *handle) {
+			auto socket = static_cast<Socket*>(handle->data);
+			Output::Warning("Read timeout error");
+			socket->InternalClose();
+		}, read_timeout_ms, read_timeout_ms);
+	}
 	OnOpen();
 }
 
@@ -239,8 +269,10 @@ void Socket::Close() {
 void Socket::InternalClose() {
 	if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)))
 		return;
+	uv_timer_stop(&read_timeout_req);
 	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
+		uv_close(reinterpret_cast<uv_handle_t*>(&socket->read_timeout_req), nullptr);
 		uv_close(reinterpret_cast<uv_handle_t*>(&socket->async), nullptr);
 		socket->is_initialized = false;
 		socket->m_send_queue = decltype(m_send_queue){};
@@ -253,17 +285,31 @@ void Socket::InternalClose() {
  * ConnectorSocket
  */
 
-void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port) {
+void ConnectorSocket::SetRemoteAddress(std::string_view host, const uint16_t port) {
+	addr_host = host;
+	addr_port = port;
+}
+
+void ConnectorSocket::ConfigSocks5(std::string_view host, const uint16_t port) {
+	if (!host.empty()) {
+		socks5_req_addr_host = addr_host;
+		socks5_req_addr_port = addr_port;
+		addr_host = host;
+		addr_port = port;
+	}
+}
+
+void ConnectorSocket::Connect() {
 	if (is_connect)
 		return;
 	is_connect = true;
 
 	manually_close_flag = false;
 
-	addr_host = _host;
-	addr_port = _port;
-
-	OnOpen = OnConnect;
+	OnOpen = [this]() {
+		if (socks5_req_addr_host.empty())
+			OnConnect();
+	};
 	OnClose = [this]() {
 		// call uv_stop
 		async_data.stop_flag = true;
@@ -323,13 +369,41 @@ void ConnectorSocket::Connect(const std::string_view _host, const uint16_t _port
 		InitStream(&loop);
 		uv_tcp_connect(&connect_req, GetStream(), reinterpret_cast<struct sockaddr*>(&addr),
 				[](uv_connect_t *connect_req, int status) {
-			auto socket = static_cast<Socket*>(connect_req->data);
+			auto socket = static_cast<ConnectorSocket*>(connect_req->data);
 			if (status < 0) {
 				Output::Warning("Connection error: {}", uv_strerror(status));
 				socket->Close();
 				return;
 			}
 			socket->Open();
+			if (!socket->socks5_req_addr_host.empty()) {
+				socket->OnRawData = [socket](const char* data, const size_t size) {
+					switch (socket->socks5_step) {
+					case SOCKS5_STEP::SS_GREETING:
+						if (!SOCKS5::CheckGreeting(std::vector<char>(data, data+size))) {
+							auto vec = SOCKS5::GetConnectionRequest(
+									socket->socks5_req_addr_host, socket->socks5_req_addr_port);
+							socket->SendRaw(vec.data(), vec.size());
+							socket->socks5_step = SOCKS5_STEP::SS_CONNECTIONREQUEST;
+							return;
+						}
+						break;
+					case SOCKS5_STEP::SS_CONNECTIONREQUEST:
+						if (!SOCKS5::CheckConnectionRequest(std::vector<char>(data, data+size))) {
+							Output::Info("SOCKS5 request successful");
+							socket->OnRawData = nullptr;
+							socket->OnConnect();
+							return;
+						}
+						break;
+					}
+					Output::Warning("SOCKS5 request failed at step {}", static_cast<uint8_t>(socket->socks5_step));
+					socket->Close();
+				};
+				auto vec = SOCKS5::GetGreeting();
+				socket->SendRaw(vec.data(), vec.size());
+				socket->socks5_step = SOCKS5_STEP::SS_GREETING;
+			}
 		});
 
 		uv_run(&loop, UV_RUN_DEFAULT);
