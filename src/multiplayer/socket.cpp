@@ -158,7 +158,7 @@ void Socket::InternalSend() {
 			[](uv_write_t* req, int err) {
 		auto socket = static_cast<Socket*>(req->data);
 		if (err) {
-			Output::Debug("Error writing to the stream: {}", uv_strerror(err));
+			socket->OnWarning(std::string("Writing to the stream failed: ").append(uv_strerror(err)));
 		}
 		if (socket->is_sending) {
 			socket->m_send_queue.pop();
@@ -196,10 +196,10 @@ void Socket::StreamRead::Handle(char *buf, ssize_t buf_used) {
 						break; // Go to the next packet
 					}
 				} else {
-					//OnLogDebug(LABEL + ": Exception (data): "
-					//	+ std::string("tmp_buf_used: ") + std::to_string(tmp_buf_used)
-					//	+ std::string(", data_size: ") + std::to_string(data_size)
-					//	+ std::string(", data_remaining: ") + std::to_string(data_remaining));
+					socket->OnWarning(std::string(": StreamRead.exception (data): ")
+						.append("tmp_buf_used: ").append(std::to_string(tmp_buf_used))
+						.append(", data_size: ").append(std::to_string(data_size))
+						.append(", data_remaining: ").append(std::to_string(data_remaining)));
 				}
 				got_head = false;
 				tmp_buf_used = 0;
@@ -258,7 +258,7 @@ void Socket::InternalOpen() {
 		StreamRead& stream_read = socket->stream_read;
 		if (nread < 0) {
 			if (nread != UV_EOF) {
-				Output::Warning("Read error: {}", uv_strerror(nread));
+				socket->OnWarning(std::string("Read failed: ").append(uv_strerror(nread)));
 			}
 			socket->InternalClose();
 		} else if (nread > 0) {
@@ -277,11 +277,11 @@ void Socket::InternalOpen() {
 	if (read_timeout_ms > 0) {
 		uv_timer_start(&read_timeout_req, [](uv_timer_t *handle) {
 			auto socket = static_cast<Socket*>(handle->data);
-			Output::Warning("Read timeout error");
+			socket->OnWarning(std::string("Read timeout: ").append(GetPeerAddress(&socket->stream)));
 			socket->InternalClose();
 		}, read_timeout_ms, read_timeout_ms);
 	}
-	Output::Info("Created a connection from: {}", GetPeerAddress(&stream));
+	OnInfo(std::string("Created a connection from: ").append(GetPeerAddress(&stream)));
 	OnOpen();
 }
 
@@ -296,7 +296,7 @@ void Socket::Close() {
 void Socket::InternalClose() {
 	if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)))
 		return;
-	Output::Info("Closing connection: {}", GetPeerAddress(&stream));
+	OnInfo(std::string("Closing connection: ").append(GetPeerAddress(&stream)));
 	uv_timer_stop(&read_timeout_req);
 	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
@@ -357,7 +357,7 @@ void ConnectorSocket::Connect() {
 		err = uv_loop_init(&loop);
 		if (err < 0) {
 			is_connect = false;
-			Output::Warning("Loop initialization error: {}", uv_strerror(err));
+			OnWarning(std::string("Loop initialization failed: ").append(uv_strerror(err)));
 			return;
 		}
 
@@ -376,7 +376,7 @@ void ConnectorSocket::Connect() {
 			// everying is done, reverse the uv_loop_init
 			int err = uv_loop_close(&loop);
 			if (err) {
-				Output::Warning("Close loop error: {}", uv_strerror(err));
+				OnWarning(std::string("Close loop failed: ").append(uv_strerror(err)));
 			}
 			is_connect = false;
 		};
@@ -390,7 +390,7 @@ void ConnectorSocket::Connect() {
 		struct sockaddr_storage addr;
 		err = Resolve(addr_host, addr_port, &loop, &addr);
 		if (err < 0) {
-			Output::Warning("Address Resolve error: {}", uv_strerror(err));
+			OnWarning(std::string("Address Resolve failed: ").append(uv_strerror(err)));
 			CloseDirectly();
 			return;
 		}
@@ -399,7 +399,7 @@ void ConnectorSocket::Connect() {
 				[](uv_connect_t *connect_req, int status) {
 			auto socket = static_cast<ConnectorSocket*>(connect_req->data);
 			if (status < 0) {
-				Output::Warning("Connection error: {}", uv_strerror(status));
+				socket->OnWarning(std::string("Connection failed: ").append(uv_strerror(status)));
 				socket->Close();
 				return;
 			}
@@ -418,14 +418,18 @@ void ConnectorSocket::Connect() {
 						break;
 					case SOCKS5_STEP::SS_CONNECTIONREQUEST:
 						if (!SOCKS5::CheckConnectionRequest(std::vector<char>(data, data+size))) {
-							Output::Info("SOCKS5 request successful");
+							socket->OnInfo(std::string("SOCKS5 request successful: ")
+								.append(socket->socks5_req_addr_host)
+								.append(":")
+								.append(std::to_string(socket->socks5_req_addr_port)));
 							socket->OnRawData = nullptr;
 							socket->OnConnect();
 							return;
 						}
 						break;
 					}
-					Output::Warning("SOCKS5 request failed at step {}", static_cast<uint8_t>(socket->socks5_step));
+					socket->OnWarning(std::string("SOCKS5 request failed at step: ").append(
+							std::to_string(static_cast<uint8_t>(socket->socks5_step))));
 					socket->Close();
 				};
 				auto vec = SOCKS5::GetGreeting();
@@ -460,7 +464,7 @@ void ServerListener::Start(bool wait_thread) {
 		err = uv_loop_init(&loop);
 		if (err < 0) {
 			is_running = false;
-			Output::Warning("Loop initialization error: {}", uv_strerror(err));
+			OnWarning(std::string("Loop initialization failed: ").append(uv_strerror(err)));
 			return;
 		}
 
@@ -484,7 +488,7 @@ void ServerListener::Start(bool wait_thread) {
 			uv_run(&loop, UV_RUN_DEFAULT);
 			int err = uv_loop_close(&loop);
 			if (err) {
-				Output::Warning("Close loop error: {}", uv_strerror(err));
+				OnWarning(std::string("Close loop failed: ").append(uv_strerror(err)));
 			}
 			is_running = false;
 		};
@@ -492,17 +496,19 @@ void ServerListener::Start(bool wait_thread) {
 		struct sockaddr_storage addr;
 		err = Resolve(addr_host, addr_port, &loop, &addr);
 		if (err < 0) {
-			Output::Warning("Address Resolve error: {}", uv_strerror(err));
+			OnWarning(std::string("Address Resolve failed: ").append(uv_strerror(err)));
 			Cleanup();
 			return;
 		}
 
 		err = uv_tcp_bind(&listener, reinterpret_cast<struct sockaddr*>(&addr), 0);
 		if (err) {
-			Output::Warning("Binding error: {}", uv_strerror(err));
+			OnWarning(std::string("Binding failed: ").append(uv_strerror(err)));
 			Cleanup();
 			return;
 		}
+
+		OnInfo("Listening on: " + addr_host + " " + std::to_string(addr_port));
 
 		err = uv_listen(reinterpret_cast<uv_stream_t*>(&listener), 4096, [](uv_stream_t *listener, int status) {
 			auto server_listener = static_cast<ServerListener*>(listener->data);
@@ -519,7 +525,7 @@ void ServerListener::Start(bool wait_thread) {
 			}
 		});
 		if (err) {
-			Output::Warning("Listen error: {}", uv_strerror(err));
+			OnWarning(std::string("Listen failed: ").append(uv_strerror(err)));
 			Cleanup();
 			return;
 		}

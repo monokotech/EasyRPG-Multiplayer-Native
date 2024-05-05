@@ -64,6 +64,9 @@ public:
 	void Open();
 	void Close();
 
+	std::function<void(std::string_view data)> OnInfo;
+	std::function<void(std::string_view data)> OnWarning;
+
 private:
 	void InternalOnData(const char* buf, const ssize_t num_bytes) {
 		std::string_view data(reinterpret_cast<const char*>(buf), num_bytes);
@@ -169,6 +172,9 @@ public:
 	void Stop();
 
 	std::function<void(std::unique_ptr<Socket>)> OnConnection;
+
+	std::function<void(std::string_view data)> OnInfo;
+	std::function<void(std::string_view data)> OnWarning;
 };
 
 #endif
