@@ -52,6 +52,8 @@ public:
 	}
 
 	void Open() override {
+		socket->OnInfo = [](std::string_view m) { Output::Info(m); };
+		socket->OnWarning = [](std::string_view m) { Output::Warning(m); };
 		socket->OnData = [this](auto p1) { HandleData(p1); };
 		socket->OnOpen = [this]() { HandleOpen(); };
 		socket->OnClose = [this]() { HandleClose(); };
@@ -515,11 +517,15 @@ void ServerMain::Start(bool wait_thread) {
 
 	if (cfg.server_bind_address_2.Get() != "") {
 		server_listener_2.reset(new ServerListener(addr_host_2, addr_port_2));
+		server_listener_2->OnInfo = [](std::string_view m) { Output::Info(m); };
+		server_listener_2->OnWarning = [](std::string_view m) { Output::Warning(m); };
 		server_listener_2->OnConnection = CreateServerSideClient;
 		server_listener_2->Start();
 	}
 
 	server_listener.reset(new ServerListener(addr_host, addr_port));
+	server_listener->OnInfo = [](std::string_view m) { Output::Info(m); };
+	server_listener->OnWarning = [](std::string_view m) { Output::Warning(m); };
 	server_listener->OnConnection = CreateServerSideClient;
 	server_listener->Start(wait_thread);
 }

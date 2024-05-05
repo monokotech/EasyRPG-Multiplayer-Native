@@ -62,6 +62,8 @@ void ClientConnection::HandleData(std::string_view data) {
 void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
+	socket->OnInfo = [](std::string_view m) { Output::Info(m); };
+	socket->OnWarning = [](std::string_view m) { Output::Warning(m); };
 	socket->SetReadTimeout(cfg->no_heartbeats.Get() ? 0 : 6000);
 	socket->SetRemoteAddress(addr_host, addr_port);
 	socket->ConfigSocks5(socks5_addr_host, socks5_addr_port);
