@@ -50,6 +50,10 @@
 #include "font.h"
 #include "baseui.h"
 
+#ifndef SERVER
+#  include "multiplayer/chatui.h"
+#endif
+
 using namespace std::chrono_literals;
 
 namespace {
@@ -207,12 +211,6 @@ EM_ASM({
 #  endif
 
 #endif
-
-	if (Player::debug_flag) {
-		if (lvl != LogLevel::Debug && lvl != LogLevel::Error) {
-			Graphics::GetMessageOverlay().AddMessage(msg, c);
-		}
-	}
 }
 
 static void HandleErrorOutput(const std::string& err) {
@@ -336,16 +334,22 @@ void Output::ErrorStr(std::string const& err) {
 	exit(EXIT_FAILURE);
 }
 
-void Output::WarningStr(std::string const& warn) {
+void Output::WarningStr(std::string const& warn, bool no_chat) {
 	if (log_level < LogLevel::Warning) {
 		return;
+	}
+	if (!no_chat && !Player::exit_flag) {
+		CUI().GotInfo("W: " + warn);
 	}
 	WriteLog(LogLevel::Warning, warn, Color(255, 255, 0, 255));
 }
 
-void Output::InfoStr(std::string const& msg) {
+void Output::InfoStr(std::string const& msg, bool no_chat) {
 	if (log_level < LogLevel::Info) {
 		return;
+	}
+	if (!no_chat && !Player::exit_flag) {
+		CUI().GotInfo("I: " + msg);
 	}
 	WriteLog(LogLevel::Info, msg, Color(255, 255, 255, 255));
 }
