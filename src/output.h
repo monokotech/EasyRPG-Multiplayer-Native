@@ -128,7 +128,7 @@ namespace Output {
 	 *
 	 * @param msg string to display.
 	 */
-	void InfoStr(std::string const& msg);
+	void InfoStr(std::string const& msg, bool no_chat = false);
 
 	/**
 	 * Display a warning with formatted string.
@@ -144,7 +144,7 @@ namespace Output {
 	 *
 	 * @param warn : warning to display.
 	 */
-	void WarningStr(std::string const& warn);
+	void WarningStr(std::string const& warn, bool no_chat = false);
 
 	/**
 	 * Raises an error message with formatted string and
@@ -179,6 +179,12 @@ namespace Output {
 	 * @param msg formatted debug text to display.
 	 */
 	void DebugStr(std::string const& msg);
+
+	template <typename FmtStr, typename... Args>
+	void InfoNoChat(FmtStr&& fmtstr, Args&&... args);
+
+	template <typename FmtStr, typename... Args>
+	void WarningNoChat(FmtStr&& fmtstr, Args&&... args);
 #else // SERVER
 	template <typename FmtStr, typename... Args>
 	void Info(FmtStr&& fmtstr, Args&&... args);
@@ -213,6 +219,16 @@ inline void Output::Warning(FmtStr&& fmtstr, Args&&... args) {
 template <typename FmtStr, typename... Args>
 inline void Output::Debug(FmtStr&& fmtstr, Args&&... args) {
 	DebugStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
+}
+
+template <typename FmtStr, typename... Args>
+inline void Output::InfoNoChat(FmtStr&& fmtstr, Args&&... args) {
+	InfoStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...), true);
+}
+
+template <typename FmtStr, typename... Args>
+inline void Output::WarningNoChat(FmtStr&& fmtstr, Args&&... args) {
+	WarningStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...), true);
 }
 #else // SERVER
 inline std::string output_time() {

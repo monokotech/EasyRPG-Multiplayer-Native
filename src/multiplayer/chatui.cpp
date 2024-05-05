@@ -1110,8 +1110,8 @@ void SetFocus(bool focused) {
 	Input::SetGameFocus(!focused);
 	chat_box->SetFocus(focused);
 	if (focused && Player::debug_flag && !cheat_flag) {
+		AddClientInfo("[TestPlay] The cheat mode is being toggled");
 		ToggleCheat();
-		Output::Warning("Chat: [TestPlay] The cheat mode is being toggled");
 	}
 }
 
@@ -1343,7 +1343,7 @@ ChatUi& ChatUi::Instance() {
 
 void ChatUi::Refresh() {
 	if(chat_box == nullptr) return;
-	const std::lock_guard<std::mutex> lock(chat_mutex);
+	// Do not add thread lock here to avoid deadlock
 	chat_box->RefreshTheme();
 }
 
@@ -1389,7 +1389,7 @@ void ChatUi::GotMessage(int visibility, int room_id,
 			0, -1, 0, 0, 0, v, "");
 	AddNotificationLogEntry("<", name, "> ", message, "",
 			1, 0, 1, -1, 0, v, sys_name);
-	Output::Info("Chat: {} [{}, {}]: {}", name, vtext, room_id, message);
+	Output::InfoNoChat("Chat: {} [{}, {}]: {}", name, vtext, room_id, message);
 }
 
 void ChatUi::GotInfo(std::string message) {
