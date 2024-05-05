@@ -36,6 +36,32 @@
  * https://stackoverflow.com/questions/56720702/call-uv-write-from-multi-thread-its-callback-never-get-called
  */
 
+std::string GetPeerAddress(uv_tcp_t* handle) {
+	/** References
+	 * https://github.com/HaxeFoundation/hashlink/issues/226#issuecomment-460034707
+	 * https://stackoverflow.com/questions/46647941/how-do-i-perform-a-dns-look-up-using-libuv */
+	struct sockaddr_storage addr;
+	int addr_len = sizeof(addr);
+	int err = uv_tcp_getpeername(handle,
+			reinterpret_cast<struct sockaddr*>(&addr), &addr_len);
+	if (!err) {
+		char host[40];
+		uint16_t port;
+		memset(host, 0, sizeof(host));
+		if (addr.ss_family == AF_INET) {
+			struct sockaddr_in* addr_in = reinterpret_cast<struct sockaddr_in*>(&addr);
+			uv_ip4_name(addr_in, host, 16);
+			port = ntohs(addr_in->sin_port);
+		} else if (addr.ss_family == AF_INET6) {
+			struct sockaddr_in6* addr_in6 = reinterpret_cast<struct sockaddr_in6*>(&addr);
+			uv_ip6_name(addr_in6, host, 39);
+			port = ntohs(addr_in6->sin6_port);
+		}
+		return std::move(std::string(host) + " " + std::to_string(port));
+	}
+	return std::move(std::string("addr err = ") + uv_strerror(err));
+}
+
 int Resolve(const std::string& address, const uint16_t port,
 		uv_loop_t* loop, struct sockaddr_storage* addr) {
 	struct addrinfo hints;
@@ -255,6 +281,7 @@ void Socket::InternalOpen() {
 			socket->InternalClose();
 		}, read_timeout_ms, read_timeout_ms);
 	}
+	Output::Info("Created a connection from: {}", GetPeerAddress(&stream));
 	OnOpen();
 }
 
@@ -269,6 +296,7 @@ void Socket::Close() {
 void Socket::InternalClose() {
 	if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)))
 		return;
+	Output::Info("Closing connection: {}", GetPeerAddress(&stream));
 	uv_timer_stop(&read_timeout_req);
 	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
