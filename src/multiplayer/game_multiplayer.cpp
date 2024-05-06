@@ -141,12 +141,8 @@ void Game_Multiplayer::InitConnection() {
 			}).detach();
 		}
 	});
-	connection.RegisterSystemHandler(SystemMessage::EXIT, [this](Connection& _) {
-		CUI().GotInfo("!! Server exited");
-		Disconnect();
-	});
-	connection.RegisterSystemHandler(SystemMessage::ACCESSDENIED_TOO_MANY_USERS, [this](Connection& _) {
-		CUI().GotInfo("!! Access denied. Too many users");
+	connection.RegisterSystemHandler(SystemMessage::TERMINATED, [this](Connection& _) {
+		CUI().GotInfo("!! Connection terminated");
 		Disconnect();
 	});
 
