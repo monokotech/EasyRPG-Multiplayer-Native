@@ -1,0 +1,49 @@
+License of source code
+----------------------
+(Please let me know if there are any mistakes)
+
+GNU General Public License, version 3
+
+(Modification to src/*.{cpp,h} for multiplayer)
+-----------------------------------------------
+Refer to game_multiplayer.{cpp,h}
+
+server.{cpp,h}
+--------------
+Copyright (C) 2023 Monokotech
+(References: game_multiplayer.cpp,
+ client_connection.cpp, and ynop-ynoserver)
+
+game_multiplayer.{cpp,h}
+------------------------
+Copyright (C) 2021 twig33
+Copyright (C) 2021 JeDaYoshi <hi@jeda.im>
+Copyright (C) 2022 azarashi <azarashi@majestaria.fun>
+Copyright (C) 2022 Char0x61, CataractJustice
+Copyright (C) 2022 maru <maru@myyahoo.com>
+Copyright (C) 2022 kekami <kekami@kekami.dev>
+Copyright (C) 2022 aleck099 <aleck099@outlook.com>
+Copyright (C) 2022 Flashfyre, Samuel H <flashfireex@gmail.com>
+Copyright (C) 2023 Monokotech
+
+nametag.{cpp,h}
+---------------
+Copyright (C) 2021 Ghabry <gabriel+github@mastergk.de>
+Copyright (C) 2022 maru <maru@myyahoo.com>
+Copyright (C) 2022 Flashfyre, Samuel H <flashfireex@gmail.com>
+Copyright (C) 2023 Altiami
+
+game_playerother.h playerother.{cpp,h}
+messages.h packet.{cpp,h}
+connection.{cpp,h} client_connection.{cpp,h}
+--------------------------------------------
+Copyright (C) 2022 kekami <kekami@kekami.dev>
+Copyright (C) 2022 maru <maru@myyahoo.com>
+Copyright (C) 2022 aleck099 <aleck099@outlook.com>
+Copyright (C) 2022 Flashfyre, Samuel H <flashfireex@gmail.com>
+Copyright (C) 2023 Monokotech
+
+chatui.{cpp,h}
+--------------
+Copyright (C) 2021 Led, Biel Borel <ledgamedev@gmail.com>
+Copyright (C) 2023 Monokotech
