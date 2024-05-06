@@ -57,8 +57,7 @@ public:
 	enum class SystemMessage {
 		OPEN,
 		CLOSE,
-		ACCESSDENIED_TOO_MANY_USERS,
-		EXIT, // the server sends exit message
+		TERMINATED, // client connection has terminated
 		EOM, // end of message to flush packets
 		_PLACEHOLDER,
 	};

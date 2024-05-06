@@ -133,10 +133,12 @@ class ConnectorSocket : public Socket {
 
 	bool manually_close_flag;
 	bool is_connect = false;
+	bool is_failed = false;
 
 public:
 	std::function<void()> OnConnect;
 	std::function<void()> OnDisconnect;
+	std::function<void()> OnFail;
 
 	void SetRemoteAddress(std::string_view host, const uint16_t port);
 

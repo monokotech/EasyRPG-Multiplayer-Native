@@ -59,7 +59,7 @@ protected:
 	std::queue<std::unique_ptr<Packet>> m_queue;
 
 	void HandleOpen();
-	void HandleClose();
+	void HandleCloseOrTerm(bool terminated = false);
 	void HandleData(std::string_view);
 };
 

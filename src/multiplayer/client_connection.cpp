@@ -39,11 +39,12 @@ void ClientConnection::HandleOpen() {
 	m_system_queue.push(SystemMessage::OPEN);
 }
 
-void ClientConnection::HandleClose() {
+void ClientConnection::HandleCloseOrTerm(bool terminated) {
 	connecting = false;
 	connected = false;
 	std::lock_guard lock(m_receive_mutex);
-	m_system_queue.push(SystemMessage::CLOSE);
+	m_system_queue.push(terminated ?
+		SystemMessage::TERMINATED : SystemMessage::CLOSE);
 }
 
 void ClientConnection::HandleData(std::string_view data) {
@@ -51,9 +52,10 @@ void ClientConnection::HandleData(std::string_view data) {
 	if (data.size() == 4 && data.substr(0, 3) == "\uFFFD") {
 		std::string_view code = data.substr(3, 1);
 		if (code == "0")
-			m_system_queue.push(SystemMessage::EXIT);
+			Output::Warning("Server exited");
 		else if (code == "1")
-			m_system_queue.push(SystemMessage::ACCESSDENIED_TOO_MANY_USERS);
+			Output::Warning("Access denied. Too many users");
+		m_system_queue.push(SystemMessage::TERMINATED);
 		return;
 	}
 	m_data_queue.push(std::move(std::string(data)));
@@ -69,7 +71,8 @@ void ClientConnection::Open() {
 	socket->ConfigSocks5(socks5_addr_host, socks5_addr_port);
 	socket->OnData = [this](auto p1) { HandleData(p1); };
 	socket->OnConnect = [this]() { HandleOpen(); };
-	socket->OnDisconnect = [this]() { HandleClose(); };
+	socket->OnDisconnect = [this]() { HandleCloseOrTerm(); };
+	socket->OnFail = [this]() { HandleCloseOrTerm(true); };
 	socket->Connect();
 	connecting = true;
 }
