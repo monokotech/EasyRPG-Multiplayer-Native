@@ -26,8 +26,8 @@
 #include "../game_pictures.h"
 #include "../tone.h"
 #include <lcf/rpg/sound.h>
-#include "client_connection.h"
 
+class ClientConnection;
 class PlayerOther;
 
 struct Virtual3DMapConfig {
@@ -94,7 +94,8 @@ public:
 		int moving_queue_limit{ 4 };
 	} settings;
 
-	ClientConnection connection;
+	std::unique_ptr<ClientConnection> connection;
+
 	bool reconnect_wait{ false };
 	bool active{ false }; // if true, it will automatically reconnect when disconnected
 	bool switching_room{ true }; // when client enters new room, but not synced to server
