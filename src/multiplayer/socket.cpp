@@ -70,11 +70,15 @@ int Resolve(const std::string& address, const uint16_t port,
 	uv_getaddrinfo_t req;
 	int err = uv_getaddrinfo(loop, &req, nullptr, address.c_str(),
 			std::to_string(port).c_str(), &hints);
-	if (req.addrinfo->ai_family == AF_INET)
-		std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in));
-	else if (req.addrinfo->ai_family == AF_INET6)
-		std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in6));
-	uv_freeaddrinfo(req.addrinfo);
+	if (!err) {
+		if (req.addrinfo->ai_family == AF_INET)
+			std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in));
+		else if (req.addrinfo->ai_family == AF_INET6)
+			std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in6));
+	}
+	if (req.addrinfo) {
+		uv_freeaddrinfo(req.addrinfo);
+	}
 	return err;
 }
 
@@ -257,6 +261,8 @@ void Socket::InternalOpen() {
 		auto socket = static_cast<Socket*>(stream->data);
 		StreamRead& stream_read = socket->stream_read;
 		if (nread < 0) {
+			// EOF means the connection is just closed remotely,
+			//  so do not output warnings
 			if (nread != UV_EOF) {
 				socket->OnWarning(std::string("Read failed: ").append(uv_strerror(nread)));
 			}
@@ -343,12 +349,6 @@ void ConnectorSocket::Connect() {
 		// call uv_stop
 		async_data.stop_flag = true;
 		uv_async_send(&async);
-		if (!manually_close_flag) {
-			if (is_failed)
-				OnFail();
-			else
-				OnDisconnect();
-		}
 	};
 
 	std::thread([this]() {
@@ -381,22 +381,24 @@ void ConnectorSocket::Connect() {
 			// everying is done, reverse the uv_loop_init
 			int err = uv_loop_close(&loop);
 			if (err) {
+				is_failed = true;
 				OnWarning(std::string("Close loop failed: ").append(uv_strerror(err)));
 			}
 			is_connect = false;
-		};
-
-		// Call this if not connected
-		auto CloseDirectly = [this, Cleanup] () {
-			Cleanup();
-			OnDisconnect();
+			if (!manually_close_flag) {
+				if (is_failed)
+					OnFail();
+				else
+					OnDisconnect();
+			}
 		};
 
 		struct sockaddr_storage addr;
 		err = Resolve(addr_host, addr_port, &loop, &addr);
 		if (err < 0) {
+			is_failed = true;
 			OnWarning(std::string("Address Resolve failed: ").append(uv_strerror(err)));
-			CloseDirectly();
+			Cleanup();
 			return;
 		}
 		InitStream(&loop);
