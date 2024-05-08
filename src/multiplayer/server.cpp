@@ -50,8 +50,8 @@ class ServerConnection : public Connection {
 
 protected:
 	void HandleData(std::string_view data) {
-		DispatchMessages(data);
-		DispatchSystem(SystemMessage::EOM);
+		Dispatch(data);
+		DispatchSystem(SystemMessage::EOD);
 	}
 
 	void HandleOpen() {
@@ -362,7 +362,7 @@ class ServerSideClient {
 			SendLocalAsync(p);
 		});
 
-		connection.RegisterSystemHandler(SystemMessage::EOM, [this](Connection& _) {
+		connection.RegisterSystemHandler(SystemMessage::EOD, [this](Connection& _) {
 			FlushQueue();
 		});
 	}
@@ -404,7 +404,7 @@ class ServerSideClient {
 		server->SendTo(id, 0, CV_CRYPT, p.ToBytes(), true);
 	}
 
-	// for no EOM and non-async order
+	// for no EOD and non-async order
 	template<typename T>
 	void SendGlobal(const T& p) {
 		server->SendTo(id, 0, CV_GLOBAL, p.ToBytes());

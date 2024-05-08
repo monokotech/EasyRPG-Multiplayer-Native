@@ -117,7 +117,7 @@ void ClientConnection::Receive() {
 		m_system_queue.pop();
 	}
 	while (!m_data_queue.empty()) {
-		DispatchMessages(m_data_queue.front());
+		Dispatch(m_data_queue.front());
 		m_data_queue.pop();
 	}
 }
