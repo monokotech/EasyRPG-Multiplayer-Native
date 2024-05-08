@@ -42,20 +42,38 @@ public:
 
 	Game_Multiplayer();
 
+	enum class NametagMode {
+		NONE,
+		CLASSIC,
+		COMPACT,
+		SLIM
+	};
+	NametagMode GetNametagMode() { return nametag_mode; }
+	void SetNametagMode(int mode) {
+		nametag_mode = static_cast<NametagMode>(mode);
+	}
+
 	void SetConfig(const Game_ConfigMultiplayer& cfg);
 	Game_ConfigMultiplayer& GetConfig();
+
 	void SetChatName(std::string chat_name);
 	std::string GetChatName();
+
 	void SetRemoteAddress(std::string address);
+
 	bool IsActive();
 	void Connect();
 	void Disconnect();
+
 	void SwitchRoom(int map_id, bool room_switch = false);
+
 	void Reset();
 	void MapQuit();
 	void Quit();
+
 	void Update();
 	void MapUpdate();
+
 	void SendChatMessage(int visibility, std::string message, int crypt_key_hash = 0);
 	void SendBasicData();
 	void MainPlayerMoved(int dir);
@@ -69,22 +87,29 @@ public:
 	void MainPlayerTriggeredEvent(int event_id, bool action);
 	void SystemGraphicChanged(StringView sys);
 	void SePlayed(const lcf::rpg::Sound& sound);
+
 	bool IsPictureSynced(int pic_id, Game_Pictures::ShowParams& params);
 	void PictureShown(int pic_id, Game_Pictures::ShowParams& params);
 	void PictureMoved(int pic_id, Game_Pictures::MoveParams& params);
 	void PictureErased(int pic_id);
+
 	bool IsBattleAnimSynced(int anim_id);
 	void PlayerBattleAnimShown(int anim_id);
+
 	void ApplyPlayerBattleAnimUpdates();
 	void ApplyFlash(int r, int g, int b, int power, int frames);
 	void ApplyRepeatingFlashes();
 	void ApplyTone(Tone tone);
 	void ApplyScreenTone();
+
 	void SwitchSet(int switch_id, int value);
 	void VariableSet(int var_id, int value);
-	void EventLocationChanged(int event_id, int x, int y);
 
+	void EventLocationChanged(int event_id, int x, int y);
 	int GetTerrainTag(int original_terrain_id, int x, int y);
+
+private:
+	NametagMode nametag_mode{NametagMode::CLASSIC};
 
 	Game_ConfigMultiplayer cfg;
 
@@ -102,19 +127,6 @@ public:
 	bool switched_room{ false }; // determines whether new connected players should fade in
 	int room_id{-1};
 	int frame_index{-1};
-
-	enum class NametagMode {
-		NONE,
-		CLASSIC,
-		COMPACT,
-		SLIM
-	};
-
-	NametagMode GetNametagMode() { return nametag_mode; }
-	void SetNametagMode(int mode) {
-		nametag_mode = static_cast<NametagMode>(mode);
-	}
-	NametagMode nametag_mode{NametagMode::CLASSIC};
 
 	std::map<int, std::string> global_players_system;
 	std::map<int, PlayerOther> players;

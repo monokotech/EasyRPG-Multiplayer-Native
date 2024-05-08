@@ -45,9 +45,7 @@ public:
 	Connection& operator=(const Connection&) = delete;
 	Connection& operator=(Connection&&) = default;
 
-	virtual void Open() = 0;
-	virtual void Close() = 0;
-	virtual void Send(std::string_view data) = 0;
+	virtual ~Connection() = default;
 
 	void SendPacket(const Packet& p);
 
@@ -76,21 +74,24 @@ public:
 		OPEN,
 		CLOSE,
 		TERMINATED, // client connection has terminated
-		EOM, // end of message to flush packets
+		EOD, // end of data to flush packets
 		_PLACEHOLDER,
 	};
 	using SystemMessageHandler = std::function<void (Connection&)>;
 	void RegisterSystemHandler(SystemMessage m, SystemMessageHandler h);
 
-	void DispatchMessages(const std::string_view data);
-	void Dispatch(std::string_view name, ParameterList args = ParameterList());
+protected:
+	virtual void Open() = 0;
+	virtual void Close() = 0;
+	virtual void Send(std::string_view data) = 0;
 
-	virtual ~Connection() = default;
+	void Dispatch(const std::string_view data);
+	void DispatchSystem(SystemMessage m);
 
+private:
 	static std::vector<std::string_view> Split(std::string_view src, std::string_view delim = Packet::PARAM_DELIM);
 
-protected:
-	void DispatchSystem(SystemMessage m);
+	void DispatchOne(std::string_view name, ParameterList args = ParameterList());
 
 	std::map<std::string, std::function<void (const ParameterList&)>> handlers;
 	SystemMessageHandler sys_handlers[static_cast<size_t>(SystemMessage::_PLACEHOLDER)];

@@ -57,7 +57,7 @@ public:
 	void Receive();
 	void FlushQueue();
 
-protected:
+private:
 	Game_ConfigMultiplayer* cfg;
 
 	std::string addr_host;

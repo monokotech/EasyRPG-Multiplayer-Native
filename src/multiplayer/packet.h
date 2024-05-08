@@ -31,12 +31,14 @@ public:
 	constexpr static std::string_view MSG_DELIM = "\uFFFE";
 
 	Packet() {}
+	Packet(std::string_view _packet_name) : packet_name(_packet_name) {}
+
 	virtual ~Packet() = default;
 	virtual std::string ToBytes() const;
 
-	Packet(std::string_view _packet_name) : packet_name(_packet_name) {}
 	std::string_view GetName() const { return packet_name; }
 
+protected:
 	static std::string Sanitize(std::string_view param);
 
 	static std::string ToString(const char* x) { return ToString(std::string_view(x)); }
@@ -69,7 +71,7 @@ public:
 	template<typename T>
 	static T Decode(std::string_view s);
 
-protected:
+private:
 	std::string packet_name{ "" };
 };
 
