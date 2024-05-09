@@ -899,7 +899,6 @@ void AddLogEntry(
 		std::string a, std::string b, std::string c, std::string d, std::string e,
 		int8_t _a, int8_t _b, int8_t _c, int8_t _d, int8_t _e,
 		VisibilityType v, std::string sys_name) {
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_log.push_back(std::make_unique<ChatEntry>(
 			a, b, c, d, e, _a, _b, _c, _d, _e, v, sys_name, true));
 	chat_box->AddLogEntry(chat_log.back().get());
@@ -917,7 +916,6 @@ void AddNotificationLogEntry(
 		std::string a, std::string b, std::string c, std::string d, std::string e,
 		int8_t _a, int8_t _b, int8_t _c, int8_t _d, int8_t _e,
 		VisibilityType v, std::string sys_name) {
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_notification_log.push_back(std::make_unique<ChatEntry>(
 			a, b, c, d, e, _a, _b, _c, _d, _e, v, sys_name, false));
 	chat_box->AddNotificationLogEntry(chat_notification_log.back().get(), MAXNOTIFICATIONS);
@@ -930,6 +928,7 @@ void AddNotificationLogEntry(std::string a, std::string b, std::string c, Visibi
 }
 
 void AddClientInfo(std::string message) {
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("[Client]: ", message, "", Messages::CV_LOCAL);
 }
 
@@ -1051,6 +1050,7 @@ void SendKeyHash() {
 }
 
 void InitHello() {
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", "!! • IME input now supported!", "", Messages::CV_LOCAL);
 	AddLogEntry("", "!!   (for Japanese, etc.)", "", Messages::CV_LOCAL);
 	AddLogEntry("", "!! • You can now copy and", "", Messages::CV_LOCAL);
@@ -1065,6 +1065,7 @@ void InitHello() {
 }
 
 void ShowUsage() {
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
 	AddLogEntry("", "Usage:", "", Messages::CV_LOCAL);
 	AddLogEntry("", "[...] Optional | <...> Required", "", Messages::CV_LOCAL);
@@ -1342,6 +1343,7 @@ ChatUi& ChatUi::Instance() {
 
 void ChatUi::Refresh() {
 	if(chat_box == nullptr) return;
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->RefreshTheme();
 }
 
@@ -1358,6 +1360,7 @@ void ChatUi::Update() {
 
 void ChatUi::SetFocus(bool focused) {
 	if(chat_box == nullptr) return;
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	::SetFocus(focused);
 }
 
@@ -1365,6 +1368,7 @@ void ChatUi::GotMessage(int visibility, int room_id,
 		std::string name, std::string message, std::string sys_name) {
 	if(chat_box == nullptr)
 		return;
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	VisibilityType v = static_cast<VisibilityType>(visibility);
 	std::string vtext = "?";
 	if (v == Messages::CV_CRYPT) {
@@ -1391,6 +1395,7 @@ void ChatUi::GotMessage(int visibility, int room_id,
 void ChatUi::GotInfo(std::string message) {
 	if(chat_box == nullptr)
 		return;
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", message, "", Messages::CV_LOCAL);
 	AddNotificationLogEntry("", message, "", Messages::CV_LOCAL);
 }
@@ -1398,6 +1403,7 @@ void ChatUi::GotInfo(std::string message) {
 void ChatUi::SetStatusConnection(bool connected, bool connecting) {
 	if(chat_box == nullptr)
 		return;
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->SetStatusConnection(connected, connecting);
 	if (connected)
 		SendKeyHash();
@@ -1406,5 +1412,6 @@ void ChatUi::SetStatusConnection(bool connected, bool connecting) {
 void ChatUi::SetStatusRoom(unsigned int room_id) {
 	if(chat_box == nullptr)
 		return;
+	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->SetStatusRoom(room_id);
 }
