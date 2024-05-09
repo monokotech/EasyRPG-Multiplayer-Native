@@ -71,6 +71,12 @@ Game_Multiplayer::Game_Multiplayer() {
 	InitConnection();
 }
 
+/**
+ * Why did DrawableMgr::SetLocalList(Map Scene) && DrawableMgr::SetLocalList(Old Scene)
+ *  When switching scenes, for example, by pressing ESC, the current scene will change.
+ *  So, bring up the Map Scene first
+ */
+
 void Game_Multiplayer::SpawnOtherPlayer(int id) {
 	auto& player = Main_Data::game_player;
 	auto& nplayer = players[id].ch;
@@ -664,6 +670,7 @@ void Game_Multiplayer::MainPlayerJumped(int x, int y) {
 void Game_Multiplayer::MainPlayerFlashed(int r, int g, int b, int p, int f) {
 	std::array<int, 5> flash_array = std::array<int, 5>{ r, g, b, p, f };
 	if (last_flash_frame_index == frame_index - 1 && (last_frame_flash.get() == nullptr || *last_frame_flash == flash_array)) {
+		// During this period, RepeatingFlashPacket will only be sent once
 		if (last_frame_flash.get() == nullptr) {
 			last_frame_flash = std::make_unique<std::array<int, 5>>(flash_array);
 			connection->SendPacketAsync<RepeatingFlashPacket>(r, g, b, p, f);
@@ -876,6 +883,7 @@ void Game_Multiplayer::Update() {
 
 void Game_Multiplayer::MapUpdate() {
 	if (active) {
+		// If Flash continues, last_flash_frame_index will always follow frame_index
 		if (last_flash_frame_index > -1 && frame_index > last_flash_frame_index) {
 			connection->SendPacketAsync<RemoveRepeatingFlashPacket>();
 			last_flash_frame_index = -1;
