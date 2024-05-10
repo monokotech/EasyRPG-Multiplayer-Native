@@ -39,16 +39,8 @@ constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
 class ServerConnection : public Connection {
-	const int& id;
-	ServerMain* server;
-
 	std::unique_ptr<Socket> socket;
 
-	std::queue<std::unique_ptr<Packet>> m_self_queue;
-	std::queue<std::unique_ptr<Packet>> m_local_queue;
-	std::queue<std::unique_ptr<Packet>> m_global_queue;
-
-protected:
 	void HandleData(std::string_view data) {
 		Dispatch(data);
 		DispatchSystem(SystemMessage::EOD);
@@ -60,13 +52,15 @@ protected:
 
 	void HandleClose() {
 		DispatchSystem(SystemMessage::CLOSE);
-		server->DeleteClient(id);
 	}
 
 public:
-	ServerConnection(const int& _id, ServerMain* _server, std::unique_ptr<Socket>& _socket)
-			: id(_id), server(_server) {
+	ServerConnection(std::unique_ptr<Socket>& _socket) {
 		socket = std::move(_socket);
+	}
+
+	void SetReadTimeout(uint16_t read_timeout_ms) {
+		socket->SetReadTimeout(read_timeout_ms);
 	}
 
 	void Open() override {
@@ -75,7 +69,6 @@ public:
 		socket->OnData = [this](auto p1) { HandleData(p1); };
 		socket->OnOpen = [this]() { HandleOpen(); };
 		socket->OnClose = [this]() { HandleClose(); };
-		socket->SetReadTimeout(server->GetConfig().no_heartbeats.Get() ? 0 : 6000);
 		socket->Open();
 	}
 
@@ -84,62 +77,7 @@ public:
 	}
 
 	void Send(std::string_view data) override {
-		socket->Send(data); // send to self
-	}
-
-	template<typename T>
-	void SendPacketAsync(std::queue<std::unique_ptr<Packet>>& queue,
-			const T& _p) {
-		auto p = new T;
-		*p = _p;
-		queue.emplace(p);
-	}
-
-	template<typename T>
-	void SendSelfPacketAsync(const T& p) {
-		SendPacketAsync(m_self_queue, p);
-	}
-
-	template<typename T>
-	void SendLocalPacketAsync(const T& p) {
-		SendPacketAsync(m_local_queue, p);
-	}
-
-	template<typename T>
-	void SendGlobalPacketAsync(const T& p) {
-		SendPacketAsync(m_global_queue, p);
-	}
-
-	void FlushQueue(std::queue<std::unique_ptr<Packet>>& queue,
-			const VisibilityType& visibility, bool self = false) {
-		std::string bulk;
-		while (!queue.empty()) {
-			const auto& e = queue.front();
-			std::string data = std::move(e->ToBytes());
-			if (bulk.size() + data.size() > MAX_BULK_SIZE) {
-				if (self)
-					Send(bulk);
-				else
-					server->SendTo(id, 0, visibility, bulk);
-				bulk.clear();
-			}
-			if (!bulk.empty())
-				bulk += Packet::MSG_DELIM;
-			bulk += data;
-			queue.pop();
-		}
-		if (!bulk.empty()) {
-			if (self)
-				Send(bulk);
-			else
-				server->SendTo(id, 0, visibility, bulk);
-		}
-	}
-
-	void FlushQueue() {
-		FlushQueue(m_global_queue, CV_GLOBAL);
-		FlushQueue(m_local_queue, CV_LOCAL);
-		FlushQueue(m_self_queue, CV_NULL, true);
+		socket->Send(data); // send back to oneself
 	}
 };
 
@@ -199,26 +137,32 @@ class ServerSideClient {
 	}
 
 	void InitConnection() {
+		using SystemMessage = Connection::SystemMessage;
+
 		connection.RegisterHandler<HeartbeatPacket>([this](HeartbeatPacket& p) {
 			SendSelfAsync(p);
 		});
 
-		using SystemMessage = Connection::SystemMessage;
+		auto Leave = [this]() {
+			SendLocalAsync(LeavePacket(id));
+			FlushQueue();
+		};
 
 		connection.RegisterSystemHandler(SystemMessage::OPEN, [this](Connection& _) {
 		});
-		connection.RegisterSystemHandler(SystemMessage::CLOSE, [this](Connection& _) {
+		connection.RegisterSystemHandler(SystemMessage::CLOSE, [this, Leave](Connection& _) {
 			if (join_sent) {
-				SendGlobal(LeavePacket(id));
+				Leave();
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
 					std::to_string(id) + (name == "" ? "" : " " + name) + " left the server."));
 				Output::Info("S: room_id={} name={} left the server", room_id, name);
+				server->DeleteClient(id);
 			}
 		});
 
-		connection.RegisterHandler<RoomPacket>([this](RoomPacket& p) {
+		connection.RegisterHandler<RoomPacket>([this, Leave](RoomPacket& p) {
 			last.pictures.clear();
-			SendGlobalAsync(LeavePacket(id));
+			Leave();
 			room_id = p.room_id;
 			SendSelfAsync(p);
 			SendSelfRoomInfoAsync();
@@ -359,57 +303,104 @@ class ServerSideClient {
 		});
 	}
 
-	template<typename T>
-	void SendSelfAsync(const T& p) {
-		connection.SendSelfPacketAsync(p);
-	}
+	/**
+	 * Direct sending
+	 *  These will be sent back to oneself
+	 */
 
-	template<typename T>
-	void SendLocalAsync(const T& p) {
-		connection.SendLocalPacketAsync(p);
-	}
-
-	template<typename T>
-	void SendGlobalAsync(const T& p) {
-		connection.SendGlobalPacketAsync(p);
-	}
-
-	void FlushQueue() {
-		connection.FlushQueue();
-	}
-
-	// also send to self
 	template<typename T>
 	void SendLocalChat(const T& p) {
 		server->SendTo(id, 0, CV_LOCAL, p.ToBytes(), true);
 	}
 
-	// also send to self
 	template<typename T>
 	void SendGlobalChat(const T& p) {
 		server->SendTo(id, 0, CV_GLOBAL, p.ToBytes(), true);
 	}
 
-	// also send to self
 	template<typename T>
 	void SendCryptChat(const T& p) {
 		server->SendTo(id, 0, CV_CRYPT, p.ToBytes(), true);
 	}
 
-	// for no EOD and non-async order
+	/**
+	 * Queue sending
+	 */
+
+	std::queue<std::unique_ptr<Packet>> m_self_queue;
+	std::queue<std::unique_ptr<Packet>> m_local_queue;
+	std::queue<std::unique_ptr<Packet>> m_global_queue;
+
 	template<typename T>
-	void SendGlobal(const T& p) {
-		server->SendTo(id, 0, CV_GLOBAL, p.ToBytes());
+	void SendPacketAsync(std::queue<std::unique_ptr<Packet>>& queue,
+			const T& _p) {
+		auto p = new T;
+		*p = _p;
+		queue.emplace(p);
+	}
+
+	template<typename T>
+	void SendSelfAsync(const T& p) {
+		SendPacketAsync(m_self_queue, p);
+	}
+
+	template<typename T>
+	void SendLocalAsync(const T& p) {
+		SendPacketAsync(m_local_queue, p);
+	}
+
+	template<typename T>
+	void SendGlobalAsync(const T& p) {
+		SendPacketAsync(m_global_queue, p);
+	}
+
+	void FlushQueueSend(const std::string& bulk,
+			const VisibilityType& visibility, bool to_self) {
+		if (to_self) {
+			connection.Send(bulk);
+		} else {
+			int to_id = 0;
+			if (visibility == Messages::CV_LOCAL) {
+				to_id = room_id;
+			}
+			server->SendTo(id, to_id, visibility, bulk);
+		}
+	}
+
+	void FlushQueue(std::queue<std::unique_ptr<Packet>>& queue,
+			const VisibilityType& visibility, bool to_self = false) {
+		std::string bulk;
+		while (!queue.empty()) {
+			const auto& e = queue.front();
+			std::string data = std::move(e->ToBytes());
+			if (bulk.size() + data.size() > MAX_BULK_SIZE) {
+				FlushQueueSend(bulk, visibility, to_self);
+				bulk.clear();
+			}
+			if (!bulk.empty())
+				bulk += Packet::MSG_DELIM;
+			bulk += data;
+			queue.pop();
+		}
+		if (!bulk.empty()) {
+			FlushQueueSend(bulk, visibility, to_self);
+		}
+	}
+
+	void FlushQueue() {
+		FlushQueue(m_global_queue, CV_GLOBAL);
+		FlushQueue(m_local_queue, CV_LOCAL);
+		FlushQueue(m_self_queue, CV_NULL, true);
 	}
 
 public:
 	ServerSideClient(ServerMain* _server, int _id, std::unique_ptr<Socket> _socket)
-			: server(_server), id(_id),
-			connection(ServerConnection(id, _server, _socket)) {
+			: server(_server), id(_id), connection(ServerConnection(_socket)) {
 		InitConnection();
 	}
 
 	void Open() {
+		connection.SetReadTimeout(server->GetConfig().no_heartbeats.Get() ? 0 : 6000);
 		connection.Open();
 	}
 
@@ -495,7 +486,9 @@ void ServerMain::Start(bool wait_thread) {
 				from_client = from_client_it->second.get();
 			}
 			// send to global, local and crypt
-			if (data_to_send->to_id == 0) {
+			if (data_to_send->visibility == Messages::CV_LOCAL ||
+				data_to_send->visibility == Messages::CV_CRYPT ||
+					data_to_send->visibility == Messages::CV_GLOBAL) {
 				// enter on every client
 				for (const auto& it : clients) {
 					auto& to_client = it.second;
@@ -505,7 +498,7 @@ void ServerMain::Start(bool wait_thread) {
 						continue;
 					// send to local
 					if (data_to_send->visibility == Messages::CV_LOCAL &&
-							from_client && from_client->GetRoomId() == to_client->GetRoomId()) {
+							from_client && data_to_send->to_id == to_client->GetRoomId()) {
 						to_client->Send(data_to_send->data);
 					// send to crypt
 					} else if (data_to_send->visibility == Messages::CV_CRYPT &&
