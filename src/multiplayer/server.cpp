@@ -95,8 +95,6 @@ class ServerSideClient {
 		HiddenPacket hidden;
 		SystemPacket system;
 		std::map<int, ShowPicturePacket> pictures;
-
-		bool has_repeating_flash{ false };
 	};
 
 	ServerMain* server;
@@ -124,7 +122,7 @@ class ServerSideClient {
 				SendSelfAsync(NamePacket(other.id, other.name));
 			if (other.last.sprite.index != -1)
 				SendSelfAsync(other.last.sprite);
-			if (other.last.has_repeating_flash)
+			if (other.last.repeating_flash.IsAvailable())
 				SendSelfAsync(other.last.repeating_flash);
 			if (other.last.hidden.hidden_bin == 1)
 				SendSelfAsync(other.last.hidden);
@@ -161,6 +159,8 @@ class ServerSideClient {
 		});
 
 		connection.RegisterHandler<RoomPacket>([this, Leave](RoomPacket& p) {
+			// Some maps won't restore their actions, reset all here
+			last.repeating_flash.Discard();
 			last.pictures.clear();
 			Leave();
 			room_id = p.room_id;
@@ -250,12 +250,11 @@ class ServerSideClient {
 		connection.RegisterHandler<RepeatingFlashPacket>([this](RepeatingFlashPacket& p) {
 			p.id = id;
 			last.repeating_flash = p;
-			last.has_repeating_flash = true;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<RemoveRepeatingFlashPacket>([this](RemoveRepeatingFlashPacket& p) {
 			p.id = id;
-			last.has_repeating_flash = false;
+			last.repeating_flash.Discard();
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<HiddenPacket>([this](HiddenPacket& p) {
