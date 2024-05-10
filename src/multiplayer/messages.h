@@ -368,6 +368,15 @@ namespace Messages {
 		RepeatingFlashPacket(int _id, int _r, int _g, int _b, int _p, int _f) // S2C
 			: FlashPacket(packet_name, _id, _r, _g, _b, _p, _f) {}
 		RepeatingFlashPacket(const ParameterList& v) : FlashPacket(packet_name, v) {}
+
+		void Discard() {
+			is_available = false;
+		}
+		bool IsAvailable() const {
+			return is_available;
+		}
+	private:
+		bool is_available = true;
 	};
 
 	/**
