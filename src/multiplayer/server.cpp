@@ -147,14 +147,6 @@ public:
  * Clients
  */
 
-struct ServerMain::DataToSend {
-	int from_client_id;
-	int to_client_id;
-	VisibilityType visibility;
-	std::string data;
-	bool return_flag;
-};
-
 class ServerSideClient {
 	struct LastState {
 		MovePacket move;
@@ -446,6 +438,14 @@ public:
  * Server
  */
 
+struct ServerMain::DataToSend {
+	int from_id;
+	int to_id;
+	VisibilityType visibility;
+	std::string data;
+	bool return_flag;
+};
+
 void ServerMain::ForEachClient(const std::function<void(ServerSideClient&)>& callback) {
 	if (!running) return;
 	std::lock_guard lock(m_mutex);
@@ -459,11 +459,11 @@ void ServerMain::DeleteClient(const int& id) {
 	clients.erase(id);
 }
 
-void ServerMain::SendTo(const int& from_client_id, const int& to_client_id,
+void ServerMain::SendTo(const int& from_id, const int& to_id,
 		const VisibilityType& visibility, const std::string& data,
 		const bool& return_flag) {
 	if (!running) return;
-	auto data_to_send = new DataToSend{ from_client_id, to_client_id, visibility, data,
+	auto data_to_send = new DataToSend{ from_id, to_id, visibility, data,
 			return_flag };
 	{
 		std::lock_guard lock(m_mutex);
@@ -483,25 +483,25 @@ void ServerMain::Start(bool wait_thread) {
 					return !m_data_to_send_queue.empty(); });
 			auto& data_to_send = m_data_to_send_queue.front();
 			// stop the thread
-			if (data_to_send->from_client_id == 0 &&
+			if (data_to_send->from_id == 0 &&
 					data_to_send->visibility == Messages::CV_NULL) {
 				m_data_to_send_queue.pop();
 				break;
 			}
 			// check if the client is online
 			ServerSideClient* from_client = nullptr;
-			const auto& from_client_it = clients.find(data_to_send->from_client_id);
+			const auto& from_client_it = clients.find(data_to_send->from_id);
 			if (from_client_it != clients.end()) {
 				from_client = from_client_it->second.get();
 			}
 			// send to global, local and crypt
-			if (data_to_send->to_client_id == 0) {
+			if (data_to_send->to_id == 0) {
 				// enter on every client
 				for (const auto& it : clients) {
 					auto& to_client = it.second;
 					// exclude self
 					if (!data_to_send->return_flag &&
-							data_to_send->from_client_id == to_client->GetId())
+							data_to_send->from_id == to_client->GetId())
 						continue;
 					// send to local
 					if (data_to_send->visibility == Messages::CV_LOCAL &&
