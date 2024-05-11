@@ -169,6 +169,7 @@ void Game_Multiplayer::InitConnection() {
 	});
 	connection->RegisterSystemHandler(SystemMessage::TERMINATED, [this](Connection& _) {
 		CUI().GotInfo("!! Connection terminated");
+		// Here only changes state, connection already disconnected
 		Disconnect();
 	});
 

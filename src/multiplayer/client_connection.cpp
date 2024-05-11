@@ -73,6 +73,9 @@ void ClientConnection::HandleData(std::string_view data) {
 			Output::Warning("Server exited");
 		else if (code == "1")
 			Output::Warning("Access denied. Too many users");
+		// Prevent callback to OnDisconnect,
+		//  ensure m_system_queue is empty for next connection
+		Close();
 		m_system_queue.push(SystemMessage::TERMINATED);
 		return;
 	}
