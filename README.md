@@ -18,7 +18,6 @@ Remember to switch to the `dev` branch, as many updates will be submitted there 
 ### Required
 
 - [liblcf] for RPG Maker data reading.
-- [crypto++] for multiplayer chat.
 - [libuv] for multiplayer networking.
 - SDL2 >= 2.0.5 for screen backend support.
 - Pixman for low level pixel manipulation.
@@ -128,7 +127,6 @@ EasyRPG Player makes use of the following 3rd party software:
 [Tutorial]: docs/TUTORIAL.md
 [liblcf]: https://github.com/EasyRPG/liblcf
 [strfnd.h]: https://github.com/minetest/minetest
-[crypto++]: https://www.cryptopp.com/wiki/Main_Page
 [socks5.h]: https://github.com/harsath/SOCKS5-Proxy-Handler
 [libuv]: https://github.com/libuv/libuv
 [BUILDING document]: docs/BUILDING.md

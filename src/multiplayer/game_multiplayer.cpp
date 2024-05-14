@@ -55,8 +55,11 @@
 #include "game_playerother.h"
 #include "playerother.h"
 #include "messages.h"
-#include "server.h"
 #include "strfnd.h"
+
+#ifndef EMSCRIPTEN
+#  include "server.h"
+#endif
 
 using namespace Messages;
 
@@ -157,6 +160,7 @@ void Game_Multiplayer::InitConnection() {
 			Output::Debug("MP: connection is closed");
 			if (reconnect_wait) return;
 			reconnect_wait = true;
+#ifndef EMSCRIPTEN
 			std::thread([this]() {
 				std::this_thread::sleep_for(std::chrono::seconds(3));
 				reconnect_wait = false;
@@ -165,6 +169,7 @@ void Game_Multiplayer::InitConnection() {
 					Connect();
 				}
 			}).detach();
+#endif
 		}
 	});
 	connection->RegisterSystemHandler(SystemMessage::TERMINATED, [this](Connection& _) {
@@ -269,15 +274,12 @@ void Game_Multiplayer::InitConnection() {
 			while (!map_cfg_fnd.at_end()) {
 				std::string map_cfg = map_cfg_fnd.next("^");
 				Strfnd fnd(map_cfg);
-				try {
-					int map_id = stoi(fnd.next(","));
-					int event_id = stoi(fnd.next(","));
-					int terrain_id = stoi(fnd.next(","));
-					int switch_id = stoi(fnd.next(","));
-					if (virtual_3d_map_configs.size() < 100)
-						virtual_3d_map_configs[map_id] = { event_id, terrain_id, switch_id };
-				} catch (const std::exception& e) {
-				}
+				int map_id = atoi(fnd.next(",").c_str());
+				int event_id = atoi(fnd.next(",").c_str());
+				int terrain_id = atoi(fnd.next(",").c_str());
+				int switch_id = atoi(fnd.next(",").c_str());
+				if (virtual_3d_map_configs.size() < 100)
+					virtual_3d_map_configs[map_id] = { event_id, terrain_id, switch_id };
 			}
 		}
 	});
@@ -510,10 +512,13 @@ void Game_Multiplayer::InitConnection() {
 
 void Game_Multiplayer::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 	cfg = _cfg;
+#ifndef EMSCRIPTEN
 	Server().SetConfig(_cfg);
 	if (cfg.server_auto_start.Get())
 		Server().Start();
+#endif
 	connection->SetConfig(&cfg);
+#ifndef EMSCRIPTEN
 	// Heartbeat
 	if (!cfg.no_heartbeats.Get()) {
 		connection->RegisterHandler<HeartbeatPacket>([this](HeartbeatPacket& p) {});
@@ -526,6 +531,7 @@ void Game_Multiplayer::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 			}
 		}).detach();
 	}
+#endif
 }
 
 Game_ConfigMultiplayer& Game_Multiplayer::GetConfig() {

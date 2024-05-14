@@ -57,6 +57,7 @@ public:
 	>>>
 	void RegisterHandler(std::function<void (M&)> h) {
 		handlers.emplace(M::packet_name, [this, h](const ParameterList& args) {
+#ifndef EMSCRIPTEN
 			std::unique_ptr<M> pack;
 			bool invoke = true;
 			try {
@@ -67,6 +68,10 @@ public:
 			}
 			if (invoke)
 				std::invoke(h, *pack);
+#else
+			M pack {args};
+			std::invoke(h, pack);
+#endif
 		});
 	}
 

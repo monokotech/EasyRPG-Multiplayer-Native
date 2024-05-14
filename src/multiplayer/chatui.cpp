@@ -38,16 +38,12 @@
 #include "../game_variables.h"
 #include "../game_map.h"
 #include "game_multiplayer.h"
-#include "server.h"
 #include "strfnd.h"
-#include "cryptopp/pwdbased.h"
-#include "cryptopp/sha.h"
-#include "cryptopp/crc.h"
-#include "cryptopp/base64.h"
-#include "cryptopp/osrng.h"
-#include "cryptopp/filters.h"
-#include "cryptopp/aes.h"
-#include "cryptopp/gcm.h"
+#include "messages.h"
+
+#ifndef EMSCRIPTEN
+#  include "server.h"
+#endif
 
 class DrawableOnlineStatus : public Drawable {
 	Rect bounds;
@@ -932,104 +928,20 @@ void AddClientInfo(std::string message) {
 	AddLogEntry("[Client]: ", message, "", Messages::CV_LOCAL);
 }
 
-// https://www.cryptopp.com/wiki/PKCS5_PBKDF2_HMAC
 std::string GetPasswordHash(const std::string& password, unsigned int iterations = 600000) {
-	std::string salt = "";
-
-	CryptoPP::byte derived[CryptoPP::SHA256::DIGESTSIZE];
-
-	CryptoPP::PKCS5_PBKDF2_HMAC<CryptoPP::SHA256> pbkdf;
-	CryptoPP::byte unused = 0;
-
-	pbkdf.DeriveKey(derived, sizeof(derived), unused,
-		(CryptoPP::byte*)password.c_str(), password.length(),
-		(CryptoPP::byte*)salt.c_str(), salt.length(),
-		iterations, 0.0f);
-
-	std::string result;
-	CryptoPP::Base64Encoder encoder(new CryptoPP::StringSink(result), false);
-	encoder.Put(derived, sizeof(derived));
-	encoder.MessageEnd();
-
-	return std::move(result);
+	return std::string("");
 }
 
 uint32_t StringToCRC32(std::string& value) {
-	std::string digest;
-	CryptoPP::CRC32C crc;
-	crc.Update((CryptoPP::byte*)&value[0], value.size());
-	digest.resize(crc.DigestSize());
-	crc.Final((CryptoPP::byte*)&digest[0]);
-	return *((uint32_t*)digest.data());
+	return 0;
 }
 
-// https://cryptopp.com/wiki/Hash_Functions
-// https://cryptopp.com/wiki/Authenticated_Encryption
 std::string EncryptMessage(const std::string& password, const std::string& plain) {
-	CryptoPP::byte key[CryptoPP::AES::MAX_KEYLENGTH];
-	CryptoPP::SHA256().CalculateDigest(key, (CryptoPP::byte*)password.c_str(), password.length());
-
-	CryptoPP::AutoSeededRandomPool prng;
-	CryptoPP::byte iv[CryptoPP::AES::BLOCKSIZE];
-	prng.GenerateBlock(iv, CryptoPP::AES::BLOCKSIZE);
-
-	std::string cipher;
-	try {
-		CryptoPP::GCM<CryptoPP::AES>::Encryption encryptor;
-		encryptor.SetKeyWithIV(key, CryptoPP::AES::MAX_KEYLENGTH, iv, CryptoPP::AES::BLOCKSIZE);
-
-		CryptoPP::StringSource(plain, true,
-			new CryptoPP::AuthenticatedEncryptionFilter(encryptor,
-				new CryptoPP::StringSink(cipher)
-			)
-		);
-	} catch(const CryptoPP::Exception& e) {
-		Output::Debug("EncryptMessage exception: {}", e.what());
-	}
-
-	std::string result;
-	CryptoPP::Base64Encoder encoder(new CryptoPP::StringSink(result), false);
-	encoder.Put(iv, sizeof(iv));
-	encoder.Put((CryptoPP::byte*)cipher.c_str(), cipher.length());
-	encoder.MessageEnd();
-
-	return std::move(result);
+	return std::string("");
 }
 
 std::string DecryptMessage(const std::string& password, const std::string& data, std::string& recovered) {
-	CryptoPP::byte key[CryptoPP::AES::MAX_KEYLENGTH];
-	CryptoPP::SHA256().CalculateDigest(key, (CryptoPP::byte*)password.c_str(), password.length());
-
-	CryptoPP::byte iv[CryptoPP::AES::BLOCKSIZE];
-	std::string cipher;
-
-	CryptoPP::Base64Decoder decoder;
-	decoder.Put((CryptoPP::byte*)data.data(), data.size());
-	decoder.MessageEnd();
-
-	CryptoPP::word64 size = decoder.MaxRetrievable();
-	decoder.Get(iv, CryptoPP::AES::BLOCKSIZE);
-	size_t cipher_size = size-CryptoPP::AES::BLOCKSIZE;
-	cipher.resize(cipher_size);
-	decoder.Get((CryptoPP::byte*)cipher.data(), cipher_size);
-
-	std::string exception_what;
-	try {
-		CryptoPP::GCM<CryptoPP::AES>::Decryption decryptor;
-		decryptor.SetKeyWithIV(key, CryptoPP::AES::MAX_KEYLENGTH, iv, CryptoPP::AES::BLOCKSIZE);
-
-		CryptoPP::StringSource(cipher, true,
-			new CryptoPP::AuthenticatedDecryptionFilter(decryptor,
-				new CryptoPP::StringSink(recovered)
-			)
-		);
-	} catch(const CryptoPP::Exception& e) {
-		recovered = "";
-		exception_what = e.what();
-		Output::Debug("DecryptMessage exception: {}", exception_what);
-	}
-
-	return std::move(exception_what);
+	return std::string("");
 }
 
 bool SetChatVisibility(std::string visibility_name) {
@@ -1214,6 +1126,7 @@ void InputsTyping() {
 		std::string command = fnd.next(" ");
 		// command: !server
 		if (command == "!server" || command == "!srv") {
+#ifndef EMSCRIPTEN
 			std::string option = fnd.next(" ");
 			if (option == "on") {
 				Server().Start();
@@ -1222,6 +1135,7 @@ void InputsTyping() {
 				Server().Stop();
 				AddClientInfo("Server: off");
 			}
+#endif
 		// command: !connect
 		} else if (command == "!connect" || command == "!c") {
 			std::string address = fnd.next("");
@@ -1251,11 +1165,13 @@ void InputsTyping() {
 				std::string chat_crypt_password = fnd.next(" ");
 				if (chat_crypt_password != "") {
 					AddClientInfo("CRYPT: Generating encryption key ...");
+#ifndef EMSCRIPTEN
 					std::thread([chat_crypt_password]() {
 						GMI().GetConfig().client_chat_crypt_key.Set(GetPasswordHash(chat_crypt_password));
 						SendKeyHash();
 						AddClientInfo("CRYPT: Done");
 					}).detach();
+#endif
 				}
 			}
 		// command: !log

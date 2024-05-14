@@ -112,7 +112,6 @@ __MACOSX
 # legacy
 /lib/liblcf/
 /lib/libuv/
-/lib/cryptopp-cmake/
 .buildconfig
 
 # Android

@@ -18,14 +18,19 @@
 
 #include <thread>
 #include "client_connection.h"
-#include "socket.h"
 #include "../output.h"
+
+#ifndef EMSCRIPTEN
+#  include "socket.h"
+#endif
 
 constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
 		Packet::MSG_DELIM.size();
 
 ClientConnection::ClientConnection() {
+#ifndef EMSCRIPTEN
 	socket.reset(new ConnectorSocket());
+#endif
 }
 // ->> unused code
 ClientConnection::ClientConnection(ClientConnection&& o)
@@ -85,6 +90,7 @@ void ClientConnection::HandleData(std::string_view data) {
 void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
+#ifndef EMSCRIPTEN
 	socket->OnInfo = [](std::string_view m) { Output::Info(m); };
 	socket->OnWarning = [](std::string_view m) { Output::Warning(m); };
 	socket->SetReadTimeout(cfg->no_heartbeats.Get() ? 0 : 6000);
@@ -95,13 +101,16 @@ void ClientConnection::Open() {
 	socket->OnDisconnect = [this]() { HandleCloseOrTerm(); };
 	socket->OnFail = [this]() { HandleCloseOrTerm(true); };
 	socket->Connect();
+#endif
 	connecting = true;
 }
 
 void ClientConnection::Close() {
 	if (!connected && !connecting)
 		return;
+#ifndef EMSCRIPTEN
 	socket->Disconnect();
+#endif
 	m_queue = decltype(m_queue){};
 	connecting = false;
 	connected = false;
@@ -110,7 +119,9 @@ void ClientConnection::Close() {
 void ClientConnection::Send(std::string_view data) {
 	if (!connected)
 		return;
+#ifndef EMSCRIPTEN
 	socket->Send(data);
+#endif
 }
 
 void ClientConnection::Receive() {

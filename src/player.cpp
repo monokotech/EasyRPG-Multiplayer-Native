@@ -87,7 +87,6 @@
 #include "message_overlay.h"
 #include "statustext_overlay.h"
 #include "multiplayer/chatui.h"
-#include "multiplayer/server.h"
 
 #ifdef __ANDROID__
 #include "platform/android/android.h"
@@ -100,6 +99,7 @@
 #ifndef EMSCRIPTEN
 // This is not used on Emscripten.
 #include "exe_reader.h"
+#include "multiplayer/server.h"
 #endif
 
 using namespace std::chrono_literals;
@@ -189,10 +189,12 @@ void Player::Init(std::vector<std::string> args) {
 
 	Output::Debug("CLI: {}", command_line);
 
+#ifndef EMSCRIPTEN
 	if (server_flag) {
 		Server().SetConfig(cfg.multiplayer);
 		return;
 	}
+#endif
 
 	GMI().SetConfig(cfg.multiplayer);
 
@@ -220,6 +222,7 @@ void Player::Init(std::vector<std::string> args) {
 }
 
 void Player::Run() {
+#ifndef EMSCRIPTEN
 	if (server_flag) {
 		auto signal_handler = [](int signal) {
 			Server().Stop();
@@ -230,6 +233,7 @@ void Player::Run() {
 		Server().Start(true);
 		return;
 	}
+#endif
 
 	Instrumentation::Init("EasyRPG-Player");
 
@@ -448,7 +452,9 @@ void Player::Exit() {
 	FileFinder::Quit();
 	DisplayUi.reset();
 	GMI().Quit();
+#ifndef EMSCRIPTEN
 	Server().Stop();
+#endif
 }
 
 Game_Config Player::ParseCommandLine() {

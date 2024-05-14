@@ -109,8 +109,6 @@ template<>
 int Packet::Decode(std::string_view s) {
 	int r;
 	auto e = std::from_chars(s.data(), s.data() + s.size(), r);
-	if (e.ec != std::errc())
-		throw std::runtime_error("Multiplayer::Packet::Decode<int> failed");
 	return r;
 }
 
@@ -118,7 +116,5 @@ template<>
 bool Packet::Decode(std::string_view s) {
 	if (s == "1")
 		return true;
-	if (s == "0")
-		return true;
-	throw std::runtime_error("Multiplayer::Packet::Decode<bool> failed");
+	return false;
 }

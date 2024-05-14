@@ -476,10 +476,6 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/connection.h
 	src/multiplayer/client_connection.cpp
 	src/multiplayer/client_connection.h
-	src/multiplayer/server.cpp
-	src/multiplayer/server.h
-	src/multiplayer/socket.cpp
-	src/multiplayer/socket.h
 	src/multiplayer/game_multiplayer.h
 	src/multiplayer/game_playerother.h
 	src/multiplayer/messages.h
@@ -494,6 +490,15 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/playerother.h
 	src/multiplayer/strfnd.h
 )
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+	target_sources(${PROJECT_NAME} PRIVATE
+		src/multiplayer/server.cpp
+		src/multiplayer/server.h
+		src/multiplayer/socket.cpp
+		src/multiplayer/socket.h
+	)
+endif()
 
 add_library(${PROJECT_NAME}_server OBJECT
 	src/utils.cpp
@@ -878,7 +883,7 @@ endif()
 
 option(PLAYER_MULTIPLAYER "Enable Multiplayer." OFF)
 
-if(PLAYER_MULTIPLAYER)
+if(PLAYER_MULTIPLAYER AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 	set(LIBUV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/libuv")
 	if(NOT EXISTS ${LIBUV_PATH})
 		find_package(Git REQUIRED)
@@ -901,28 +906,6 @@ endif()
 if(BUILD_CLIENT) # BUILD_CLIENT
 
 if(PLAYER_MULTIPLAYER)
-	set(CRYPTOPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/cryptopp-cmake")
-	set(CRYPTOPP_SOURCES "${CRYPTOPP_PATH}/cryptopp/cryptopp")
-	if(NOT EXISTS ${CRYPTOPP_PATH})
-		find_package(Git REQUIRED)
-		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
-			"-c" "advice.detachedHead=false" "--branch"
-			"v8.8.0"
-			"https://github.com/abdes/cryptopp-cmake"
-			"${CRYPTOPP_PATH}")
-		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
-			"-c" "advice.detachedHead=false" "--branch"
-			"CRYPTOPP_8_8_0"
-			"https://github.com/weidai11/cryptopp"
-			"${CRYPTOPP_SOURCES}")
-		include(Patch)
-		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${CRYPTOPP_PATH}"
-			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/cryptopp.patch )
-	endif()
-	set(CRYPTOPP_BUILD_TESTING OFF)
-	set(CRYPTOPP_INSTALL OFF)
-	add_subdirectory(${CRYPTOPP_PATH})
-	target_link_libraries(${PROJECT_NAME} cryptopp)
 endif()
 
 # Detect all required libraries
