@@ -19,14 +19,10 @@
 #ifndef EP_MULTIPLAYER_CONNECTION_H
 #define EP_MULTIPLAYER_CONNECTION_H
 
-#include <stdexcept>
 #include <queue>
-#include <memory>
 #include <map>
-#include <vector>
 #include <functional>
 #include <type_traits>
-#include <string>
 
 #include "packet.h"
 #include "../output.h"
@@ -35,8 +31,6 @@ namespace Multiplayer {
 
 class Connection {
 public:
-	static const size_t MAX_QUEUE_SIZE{ 4096 };
-
 	static void ParseAddress(std::string address, std::string& host, uint16_t& port);
 
 	Connection() {}
@@ -49,29 +43,14 @@ public:
 
 	void SendPacket(const Packet& p);
 
-	using ParameterList = std::vector<std::string_view>;
-
 	template<typename M, typename = std::enable_if_t<std::conjunction_v<
 		std::is_convertible<M, Packet>,
-		std::is_constructible<M, const ParameterList&>
+		std::is_constructible<M, std::istream&>
 	>>>
 	void RegisterHandler(std::function<void (M&)> h) {
-		handlers.emplace(M::packet_name, [this, h](const ParameterList& args) {
-#ifndef EMSCRIPTEN
-			std::unique_ptr<M> pack;
-			bool invoke = true;
-			try {
-				pack.reset(new M(args));
-			} catch (const std::exception& e) {
-				invoke = false;
-				Output::Debug("Connection: RegisterHandler exception: {}", e.what());
-			}
-			if (invoke)
-				std::invoke(h, *pack);
-#else
-			M pack {args};
+		handlers.emplace(M::packet_type, [this, h](std::istream& is) {
+			M pack {is};
 			std::invoke(h, pack);
-#endif
 		});
 	}
 
@@ -93,12 +72,10 @@ protected:
 	void Dispatch(const std::string_view data);
 	void DispatchSystem(SystemMessage m);
 
+	void Print(std::string_view tag, std::string_view data);
+
 private:
-	static std::vector<std::string_view> Split(std::string_view src, std::string_view delim = Packet::PARAM_DELIM);
-
-	void DispatchOne(std::string_view name, ParameterList args = ParameterList());
-
-	std::map<std::string, std::function<void (const ParameterList&)>> handlers;
+	std::map<uint8_t, std::function<void (std::istream&)>> handlers;
 	SystemMessageHandler sys_handlers[static_cast<size_t>(SystemMessage::_PLACEHOLDER)];
 };
 

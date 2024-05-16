@@ -35,13 +35,11 @@
 using namespace Multiplayer;
 using namespace Messages;
 
-constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
-		Packet::MSG_DELIM.size();
-
 class ServerConnection : public Connection {
 	std::unique_ptr<Socket> socket;
 
 	void HandleData(std::string_view data) {
+		Print("Server Received: ", data);
 		Dispatch(data);
 		DispatchSystem(SystemMessage::EOD);
 	}
@@ -78,6 +76,7 @@ public:
 
 	void Send(std::string_view data) override {
 		socket->Send(data); // send back to oneself
+		Print("Server Sent: ", data);
 	}
 };
 
@@ -86,6 +85,8 @@ public:
  */
 
 class ServerSideClient {
+	static constexpr size_t QUEUE_MAX_BULK_SIZE = 4096;
+
 	struct LastState {
 		MovePacket move;
 		FacingPacket facing;
@@ -124,7 +125,7 @@ class ServerSideClient {
 				SendSelfAsync(other.last.sprite);
 			if (other.last.repeating_flash.IsAvailable())
 				SendSelfAsync(other.last.repeating_flash);
-			if (other.last.hidden.hidden_bin == 1)
+			if (other.last.hidden.is_hidden)
 				SendSelfAsync(other.last.hidden);
 			if (other.last.system.name != "")
 				SendSelfAsync(other.last.system);
@@ -267,7 +268,7 @@ class ServerSideClient {
 			last.system = p;
 			SendLocalAsync(p);
 		});
-		connection.RegisterHandler<SEPacket>([this](SEPacket& p) {
+		connection.RegisterHandler<SoundEffectPacket>([this](SoundEffectPacket& p) {
 			p.id = id;
 			SendLocalAsync(p);
 		});
@@ -303,7 +304,7 @@ class ServerSideClient {
 	}
 
 	/**
-	 * Direct sending
+	 * Sending without queue
 	 *  These will be sent back to oneself
 	 */
 
@@ -372,12 +373,10 @@ class ServerSideClient {
 		while (!queue.empty()) {
 			const auto& e = queue.front();
 			std::string data = std::move(e->ToBytes());
-			if (bulk.size() + data.size() > MAX_BULK_SIZE) {
+			if (bulk.size() + data.size() > QUEUE_MAX_BULK_SIZE) {
 				FlushQueueSend(bulk, visibility, to_self);
 				bulk.clear();
 			}
-			if (!bulk.empty())
-				bulk += Packet::MSG_DELIM;
 			bulk += data;
 			queue.pop();
 		}

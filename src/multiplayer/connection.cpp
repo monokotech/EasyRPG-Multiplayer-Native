@@ -17,6 +17,7 @@
  */
 
 #include "connection.h"
+#include "util/hexdump.h"
 
 using namespace Multiplayer;
 
@@ -49,46 +50,20 @@ void Connection::SendPacket(const Packet& p) {
 	Send(p.ToBytes());
 }
 
-Connection::ParameterList Connection::Split(std::string_view src,
-		std::string_view delim) {
-	std::vector<std::string_view> r;
-	size_t p{}, p2{};
-	while ((p = src.find(delim, p)) != src.npos) {
-		r.emplace_back(src.substr(p2, p - p2));
-		p += delim.size();
-		p2 = p;
-	}
-	r.emplace_back(src.substr(p2));
-	return r;
-}
-
-void Connection::DispatchOne(std::string_view name, ParameterList args) {
-	auto it = handlers.find(std::string(name));
-	if (it != handlers.end()) {
-		std::invoke(it->second, args);
-	} else {
-		Output::Debug("Connection: Unregistered packet received");
-	}
-}
-
 void Connection::Dispatch(const std::string_view data) {
-	std::vector<std::string_view> mstrs = Split(data, Packet::MSG_DELIM);
-	for (auto& mstr : mstrs) {
-		auto p = mstr.find(Multiplayer::Packet::PARAM_DELIM);
-		if (p == mstr.npos) {
-			/**
-			 * Usually npos is the maximum value of size_t.
-			 * Adding PARAM_DELIM.size() to it is undefined behavior.
-			 * If it returns end iterator instead of npos, the if statement is
-			 * duplicated code because the statement in else clause will handle it.
-			 */
-			// the data has no parameter list
-			DispatchOne(mstr);
+	std::istringstream iss(std::string(data), std::ios_base::binary);
+	while (!iss.eof()) {
+		std::istringstream pkt_iss(DeSerializeString16(iss));
+		auto packet_type = ReadU8(pkt_iss);
+		auto it = handlers.find(packet_type);
+		if (it != handlers.end()) {
+			std::invoke(it->second, pkt_iss);
 		} else {
-			auto namestr = mstr.substr(0, p);
-			auto argstr = mstr.substr(p + Packet::PARAM_DELIM.size());
-			DispatchOne(namestr, Split(argstr));
+			Output::Debug("Connection: Unregistered packet received");
+			break;
 		}
+		ReadU16(pkt_iss); // skip unused bytes
+		iss.peek(); // check eof
 	}
 }
 
@@ -100,4 +75,11 @@ void Connection::DispatchSystem(SystemMessage m) {
 	auto f = sys_handlers[static_cast<size_t>(m)];
 	if (f)
 		std::invoke(f, *this);
+}
+
+void Connection::Print(std::string_view tag, std::string_view data) {
+	if (data == std::string("\x00\x03\x01\x28\x28", 5)) { // heartbeat
+		return;
+	}
+	Output::Debug("{}{} bytes\n{}", tag, data.size(), HexDump(data));
 }

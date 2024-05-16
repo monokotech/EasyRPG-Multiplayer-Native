@@ -489,6 +489,10 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/playerother.cpp
 	src/multiplayer/playerother.h
 	src/multiplayer/strfnd.h
+	src/multiplayer/util/serialize.cpp
+	src/multiplayer/util/serialize.h
+	src/multiplayer/util/hexdump.cpp
+	src/multiplayer/util/hexdump.h
 )
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
@@ -505,6 +509,8 @@ add_library(${PROJECT_NAME}_server OBJECT
 	src/multiplayer/connection.cpp
 	src/multiplayer/socket.cpp
 	src/multiplayer/packet.cpp
+	src/multiplayer/util/serialize.cpp
+	src/multiplayer/util/hexdump.cpp
 )
 
 # Include directories

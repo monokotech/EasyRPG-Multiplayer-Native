@@ -27,7 +27,7 @@
 #include "../game_pictures.h"
 
 namespace Messages {
-	enum VisibilityType : int {
+	enum VisibilityType : uint8_t {
 		CV_NULL = 0,
 		CV_LOCAL = 1,
 		CV_GLOBAL = 2,
@@ -46,8 +46,20 @@ namespace Messages {
 		{ "CRYPT", CV_CRYPT }
 	};
 
+	enum PacketType : uint8_t {
+		PT_HEARTBEAT = 0x01,
+		PT_ROOM = 0x02, PT_JOIN = 0x03, PT_LEAVE = 0x04,
+		PT_NAME = 0x05, PT_CHAT = 0x06,
+		PT_MOVE = 0x07, PT_TELEPORT = 0x08, PT_JUMP = 0x09,
+		PT_FACING= 0x0a, PT_SPEED = 0x0b, PT_SPRITE = 0x0c,
+		PT_FLASH = 0x0d, PT_REPEATING_FLASH = 0x0e, PT_REMOVE_REPEATING_FLASH = 0x0f,
+		PT_HIDDEN = 0x10, PT_SYSTEM = 0x11, PT_SOUND_EFFECT = 0x12,
+		PT_SHOW_PICTURE = 0x13, PT_MOVE_PICTRUE = 0x14, PT_ERASE_PICTURE = 0x15,
+		PT_SHOW_PLAYER_BATTLE_ANIM = 0x16,
+		PT_CONFIG = 0x17,
+	};
+
 	using Packet = Multiplayer::Packet;
-	using ParameterList = Multiplayer::Connection::ParameterList;
 
 	/**
 	 * Heartbeat
@@ -55,9 +67,9 @@ namespace Messages {
 
 	class HeartbeatPacket : public Packet {
 	public:
-		constexpr static std::string_view packet_name{ "hb" };
-		HeartbeatPacket() : Packet(packet_name) {}
-		HeartbeatPacket(const ParameterList& v) : Packet(packet_name) {}
+		constexpr static uint8_t packet_type{ PT_HEARTBEAT };
+		HeartbeatPacket() : Packet(packet_type) {}
+		HeartbeatPacket(std::istream& is) : Packet(packet_type) {}
 	};
 
 	/**
@@ -66,13 +78,13 @@ namespace Messages {
 
 	class RoomPacket : public Packet {
 	public:
-		constexpr static std::string_view packet_name{ "room" };
+		constexpr static uint8_t packet_type{ PT_ROOM };
 		RoomPacket() {}
-		RoomPacket(int _room_id) : Packet(packet_name), room_id(_room_id) {}
-		std::string ToBytes() const override { return Build(room_id); }
-		RoomPacket(const ParameterList& v)
-			: Packet(packet_name), room_id(Decode<int>(v.at(0))) {}
-		int room_id;
+		RoomPacket(uint16_t _room_id) : Packet(packet_type), room_id(_room_id) {}
+		RoomPacket(std::istream& is) : Packet(packet_type), room_id(ReadU16(is)) {}
+		uint16_t room_id{0};
+	private:
+		void Serialize(std::ostream& os) const override { WritePartial(os, room_id); }
 	};
 
 	/**
@@ -81,14 +93,12 @@ namespace Messages {
 
 	class PlayerPacket : public Packet {
 	public:
-		PlayerPacket(std::string_view _packet_name) // C2S
-			: Packet(std::move(_packet_name)) {}
-		PlayerPacket(std::string_view _packet_name, int _id) // S2C
-			: Packet(std::move(_packet_name)), id(_id) {}
-		void Append(std::string& s) const { AppendPartial(s, id); }
-		PlayerPacket(std::string_view _packet_name, std::string_view _id)
-			: Packet(std::move(_packet_name)), id(Decode<int>(_id)) {}
-		int id{0};
+		uint16_t id{0};
+	protected:
+		PlayerPacket(uint8_t _packet_type) : Packet(_packet_type) {} // C2S
+		PlayerPacket(uint8_t _packet_type, uint16_t _id) : Packet(_packet_type), id(_id) {} // S2C
+		PlayerPacket(uint8_t _packet_type, std::istream& is) : Packet(_packet_type), id(ReadU16(is)) {}
+		void Serialize(std::ostream& os) const { WritePartial(os, id); }
 	};
 
 	/**
@@ -97,16 +107,12 @@ namespace Messages {
 
 	class JoinPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "j" };
-		JoinPacket() : PlayerPacket(packet_name) {}
-		JoinPacket(int _id) : PlayerPacket(packet_name, _id) {} // S2C
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			return r;
-		}
-		JoinPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)) {}
+		constexpr static uint8_t packet_type{ PT_JOIN };
+		JoinPacket() : PlayerPacket(packet_type) {}
+		JoinPacket(uint16_t _id) : PlayerPacket(packet_type, _id) {} // S2C
+		JoinPacket(std::istream& is) : PlayerPacket(packet_type, is) {}
+	private:
+		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
 	};
 
 	/**
@@ -115,16 +121,12 @@ namespace Messages {
 
 	class LeavePacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "l" };
-		LeavePacket() : PlayerPacket(packet_name) {}
-		LeavePacket(int _id) : PlayerPacket(packet_name, _id) {} // S2C
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			return r;
-		}
-		LeavePacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)) {}
+		constexpr static uint8_t packet_type{ PT_LEAVE };
+		LeavePacket() : PlayerPacket(packet_type) {}
+		LeavePacket(uint16_t _id) : PlayerPacket(packet_type, _id) {} // S2C
+		LeavePacket(std::istream& is) : PlayerPacket(packet_type, is) {}
+	private:
+		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
 	};
 
 	/**
@@ -133,22 +135,20 @@ namespace Messages {
 
 	class NamePacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "name" };
-		NamePacket() : PlayerPacket(packet_name) {}
+		constexpr static uint8_t packet_type{ PT_NAME };
+		NamePacket() : PlayerPacket(packet_type) {}
 		NamePacket(std::string _name) // C2S
-			: PlayerPacket(packet_name), name(std::move(_name)) {}
-		NamePacket(int _id, std::string _name) // S2C
-			: PlayerPacket(packet_name, _id), name(std::move(_name)) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, name);
-			return r;
-		}
-		NamePacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			name(v.at(1)) {}
+			: PlayerPacket(packet_type), name(std::move(_name)) {}
+		NamePacket(uint16_t _id, std::string _name) // S2C
+			: PlayerPacket(packet_type, _id), name(std::move(_name)) {}
+		NamePacket(std::istream& is) : PlayerPacket(packet_type, is),
+			name(DeSerializeString16(is)) {}
 		std::string name;
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, name);
+		}
 	};
 
 	/**
@@ -157,31 +157,32 @@ namespace Messages {
 
 	class ChatPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "say" };
-		ChatPacket() : PlayerPacket(packet_name) {}
-		ChatPacket(int _v, std::string _m) // C2S
-			: PlayerPacket(packet_name), visibility(_v), message(std::move(_m)) {}
-		ChatPacket(int _id, int _t, int _v, int _r, std::string _n, std::string _m) // S2C
-			: PlayerPacket(packet_name, _id), type(_t), visibility(_v),
+		constexpr static uint8_t packet_type{ PT_CHAT };
+		ChatPacket() : PlayerPacket(packet_type) {}
+		ChatPacket(uint8_t _v, std::string _m) // C2S
+			: PlayerPacket(packet_type), visibility(_v), message(std::move(_m)) {}
+		ChatPacket(uint16_t _id, uint8_t _t, uint8_t _v, uint16_t _r, std::string _n, std::string _m) // S2C
+			: PlayerPacket(packet_type, _id), type(_t), visibility(_v),
 			room_id(_r), name(std::move(_n)), message(std::move(_m)) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, type, visibility, room_id, crypt_key_hash, name, message, sys_name);
-			return r;
-		};
-		ChatPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			type(Decode<int>(v.at(1))), visibility(Decode<int>(v.at(2))),
-			room_id(Decode<int>(v.at(3))), crypt_key_hash(Decode<int>(v.at(4))),
-			name(v.at(5)), message(v.at(6)), sys_name(v.at(7)) {}
-		int type; // 0 = info, 1 = chat
-		int visibility;
-		int room_id;
-		int crypt_key_hash;
+		ChatPacket(std::istream& is)
+			: PlayerPacket(packet_type, is),
+			type(ReadU8(is)), visibility(ReadU8(is)),
+			room_id(ReadU16(is)), crypt_key_hash(ReadU32(is)),
+			name(DeSerializeString16(is)),
+			message(DeSerializeString16(is)),
+			sys_name(DeSerializeString16(is)) {}
+		uint8_t type{0}; // 0: info, 1: chat
+		uint8_t visibility{0};
+		uint16_t room_id{0};
+		uint32_t crypt_key_hash{0};
 		std::string name;
 		std::string message;
 		std::string sys_name;
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, type, visibility, room_id, crypt_key_hash, name, message, sys_name);
+		};
 	};
 
 	/**
@@ -190,23 +191,23 @@ namespace Messages {
 
 	class MovePacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "m" };
-		MovePacket() : PlayerPacket(packet_name) {}
-		MovePacket(int _type, int _x, int _y) // C2S
-			: PlayerPacket(packet_name), type(_type), x(_x), y(_y) {}
-		MovePacket(int _id, int _type, int _x, int _y) // S2C
-			: PlayerPacket(packet_name, _id), type(_type), x(_x), y(_y) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, type, x, y);
-			return r;
+		constexpr static uint8_t packet_type{ PT_MOVE };
+		MovePacket() : PlayerPacket(packet_type) {}
+		MovePacket(int8_t _type, uint16_t _x, uint16_t _y) // C2S
+			: PlayerPacket(packet_type), type(_type), x(_x), y(_y) {}
+		MovePacket(uint16_t _id, int8_t _type, uint16_t _x, uint16_t _y) // S2C
+			: PlayerPacket(packet_type, _id), type(_type), x(_x), y(_y) {}
+		MovePacket(std::istream& is)
+			: PlayerPacket(packet_type, is),
+			type(ReadS8(is)),
+			x(ReadU16(is)), y(ReadU16(is)) {}
+		int8_t type{0}; // 0: normal, 1: event location
+		uint16_t x{0}, y{0};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, type, x, y);
 		};
-		MovePacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			type(Decode<int>(v.at(1))), // 0: normal, 1: event location
-			x(Decode<int>(v.at(2))), y(Decode<int>(v.at(3))) {}
-		int type, x, y;
 	};
 
 	/**
@@ -215,13 +216,14 @@ namespace Messages {
 
 	class TeleportPacket : public Packet {
 	public:
-		constexpr static std::string_view packet_name{ "tp" };
-		TeleportPacket() : Packet(packet_name) {}
-		TeleportPacket(int _x, int _y) : Packet(packet_name), x(_x), y(_y) {}
-		std::string ToBytes() const override { return Build(x, y); }
-		TeleportPacket(const ParameterList& v)
-			: Packet(packet_name), x(Decode<int>(v.at(0))), y(Decode<int>(v.at(1))) {}
-		int x, y;
+		constexpr static uint8_t packet_type{ PT_TELEPORT };
+		TeleportPacket() : Packet(packet_type) {}
+		TeleportPacket(uint16_t _x, uint16_t _y) : Packet(packet_type), x(_x), y(_y) {}
+		TeleportPacket(std::istream& is)
+			: Packet(packet_type), x(ReadU16(is)), y(ReadU16(is)) {}
+		uint16_t x{0}, y{0};
+	private:
+		void Serialize(std::ostream& os) const override { WritePartial(os, x, y); }
 	};
 
 	/**
@@ -230,22 +232,21 @@ namespace Messages {
 
 	class JumpPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "jmp" };
-		JumpPacket() : PlayerPacket(packet_name) {}
-		JumpPacket(int _x, int _y) // C2S
-			: PlayerPacket(packet_name), x(_x), y(_y) {}
-		JumpPacket(int _id, int _x, int _y) // S2C
-			: PlayerPacket(packet_name,  _id), x(_x), y(_y) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, x, y);
-			return r;
+		constexpr static uint8_t packet_type{ PT_JUMP };
+		JumpPacket() : PlayerPacket(packet_type) {}
+		JumpPacket(uint16_t _x, uint16_t _y) // C2S
+			: PlayerPacket(packet_type), x(_x), y(_y) {}
+		JumpPacket(uint16_t _id, uint16_t _x, uint16_t _y) // S2C
+			: PlayerPacket(packet_type, _id), x(_x), y(_y) {}
+		JumpPacket(std::istream& is)
+			: PlayerPacket(packet_type, is),
+			x(ReadU16(is)), y(ReadU16(is)) {}
+		uint16_t x{0}, y{0};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, x, y);
 		};
-		JumpPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			x(Decode<int>(v.at(1))), y(Decode<int>(v.at(2))) {}
-		int x, y;
 	};
 
 	/**
@@ -254,21 +255,20 @@ namespace Messages {
 
 	class FacingPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "f" };
-		FacingPacket() : PlayerPacket(packet_name) {}
-		FacingPacket(int _facing) // C2S
-			: PlayerPacket(packet_name), facing(_facing) {}
-		FacingPacket(int _id, int _facing) // S2C
-			: PlayerPacket(packet_name, _id), facing(_facing) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, facing);
-			return r;
+		constexpr static uint8_t packet_type{ PT_FACING };
+		FacingPacket() : PlayerPacket(packet_type) {}
+		FacingPacket(uint8_t _facing) // C2S
+			: PlayerPacket(packet_type), facing(_facing) {}
+		FacingPacket(uint16_t _id, uint8_t _facing) // S2C
+			: PlayerPacket(packet_type, _id), facing(_facing) {}
+		FacingPacket(std::istream& is)
+			: PlayerPacket(packet_type, is), facing(ReadU8(is)) {}
+		uint8_t facing{0};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, facing);
 		};
-		FacingPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)), facing(Decode<int>(v.at(1))) {}
-		int facing{0};
 	};
 
 	/**
@@ -277,21 +277,20 @@ namespace Messages {
 
 	class SpeedPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "spd" };
-		SpeedPacket() : PlayerPacket(packet_name) {}
-		SpeedPacket(int _speed) // C2S
-			: PlayerPacket(packet_name), speed(_speed) {}
-		SpeedPacket(int _id, int _speed) // S2C
-			: PlayerPacket(packet_name, _id), speed(_speed) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, speed);
-			return r;
+		constexpr static uint8_t packet_type{ PT_SPEED };
+		SpeedPacket() : PlayerPacket(packet_type) {}
+		SpeedPacket(uint16_t _speed) // C2S
+			: PlayerPacket(packet_type), speed(_speed) {}
+		SpeedPacket(uint16_t _id, uint16_t _speed) // S2C
+			: PlayerPacket(packet_type, _id), speed(_speed) {}
+		SpeedPacket(std::istream& is)
+			: PlayerPacket(packet_type, is), speed(ReadU16(is)) {}
+		uint16_t speed{0};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, speed);
 		};
-		SpeedPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)), speed(Decode<int>(v.at(1))) {}
-		int speed{0};
 	};
 
 	/**
@@ -300,23 +299,22 @@ namespace Messages {
 
 	class SpritePacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "spr" };
-		SpritePacket() : PlayerPacket(packet_name) {}
-		SpritePacket(std::string _n, int _i) // C2S
-			: PlayerPacket(packet_name), name(_n), index(_i) {}
-		SpritePacket(int _id, std::string _n, int _i) // S2C
-			: PlayerPacket(packet_name, _id), name(_n), index(_i) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, name, index);
-			return r;
-		};
-		SpritePacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			name(v.at(1)), index(Decode<int>(v.at(2))) {}
+		constexpr static uint8_t packet_type{ PT_SPRITE };
+		SpritePacket() : PlayerPacket(packet_type) {}
+		SpritePacket(std::string _n, int16_t _i) // C2S
+			: PlayerPacket(packet_type), name(std::move(_n)), index(_i) {}
+		SpritePacket(uint16_t _id, std::string _n, int16_t _i) // S2C
+			: PlayerPacket(packet_type, _id), name(std::move(_n)), index(_i) {}
+		SpritePacket(std::istream& is)
+			: PlayerPacket(packet_type, is),
+			name(DeSerializeString16(is)), index(ReadS16(is)) {}
 		std::string name;
-		int index{-1};
+		int16_t index{-1};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, name, index);
+		};
 	};
 
 	/**
@@ -325,34 +323,32 @@ namespace Messages {
 
 	class FlashPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "fl" };
-		FlashPacket() : PlayerPacket(packet_name) {}
-		FlashPacket(int _r, int _g, int _b, int _p, int _f) // C2S
-			: PlayerPacket(packet_name), r(_r), g(_g), b(_b), p(_p), f(_f) {}
-		FlashPacket(int _id, int _r, int _g, int _b, int _p, int _f) // S2C
-			: PlayerPacket(packet_name, _id), r(_r), g(_g), b(_b), p(_p), f(_f) {}
-		// custom packet_name
-		FlashPacket(std::string_view _packet_name) : PlayerPacket(_packet_name) {}
-		FlashPacket(std::string_view _packet_name, int _r, int _g, int _b, int _p, int _f) // C2S
-			: PlayerPacket(std::move(_packet_name)), r(_r), g(_g), b(_b), p(_p), f(_f) {}
-		FlashPacket(std::string_view _packet_name, int _id, int _r, int _g, int _b, int _p, int _f) // S2C
-			: PlayerPacket(std::move(_packet_name), _id), r(_r), g(_g), b(_b), p(_p), f(_f) {}
-		std::string ToBytes() const override {
-			std::string res {GetName()};
-			PlayerPacket::Append(res);
-			AppendPartial(res, r, g, b, p, f);
-			return res;
+		constexpr static uint8_t packet_type{ PT_FLASH };
+		FlashPacket() : PlayerPacket(packet_type) {}
+		FlashPacket(uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // C2S
+			: PlayerPacket(packet_type), r(_r), g(_g), b(_b), p(_p), f(_f) {}
+		FlashPacket(uint16_t _id, uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // S2C
+			: PlayerPacket(packet_type, _id), r(_r), g(_g), b(_b), p(_p), f(_f) {}
+		FlashPacket(std::istream& is)
+			: PlayerPacket(packet_type, is),
+			r(ReadU8(is)), g(ReadU8(is)), b(ReadU8(is)),
+			p(ReadU8(is)), f(ReadU8(is)) {}
+		uint8_t r{0}, g{0}, b{0}, p{0}, f{0}; // p: power, f: frames
+	protected:
+		FlashPacket(uint8_t _packet_type) : PlayerPacket(_packet_type) {}
+		FlashPacket(uint8_t _packet_type, uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // C2S
+			: PlayerPacket(_packet_type), r(_r), g(_g), b(_b), p(_p), f(_f) {}
+		FlashPacket(uint8_t _packet_type, uint16_t _id, uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // S2C
+			: PlayerPacket(_packet_type, _id), r(_r), g(_g), b(_b), p(_p), f(_f) {}
+		FlashPacket(uint8_t _packet_type, std::istream& is)
+			: PlayerPacket(_packet_type, is),
+			r(ReadU8(is)), g(ReadU8(is)), b(ReadU8(is)),
+			p(ReadU8(is)), f(ReadU8(is)) {}
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, r, g, b, p, f);
 		};
-		FlashPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			r(Decode<int>(v.at(1))), g(Decode<int>(v.at(2))), b(Decode<int>(v.at(3))),
-			p(Decode<int>(v.at(4))), f(Decode<int>(v.at(5))) {}
-		// custom packet_name
-		FlashPacket(std::string_view _packet_name, const ParameterList& v)
-			: PlayerPacket(std::move(_packet_name), v.at(0)),
-			r(Decode<int>(v.at(1))), g(Decode<int>(v.at(2))), b(Decode<int>(v.at(3))),
-			p(Decode<int>(v.at(4))), f(Decode<int>(v.at(5))) {}
-		int r, g, b, p, f;
 	};
 
 	/**
@@ -361,14 +357,13 @@ namespace Messages {
 
 	class RepeatingFlashPacket : public FlashPacket {
 	public:
-		constexpr static std::string_view packet_name{ "rfl" };
-		RepeatingFlashPacket() : FlashPacket(packet_name) {}
-		RepeatingFlashPacket(int _r, int _g, int _b, int _p, int _f) // C2S
-			: FlashPacket(packet_name, _r, _g, _b, _p, _f) {}
-		RepeatingFlashPacket(int _id, int _r, int _g, int _b, int _p, int _f) // S2C
-			: FlashPacket(packet_name, _id, _r, _g, _b, _p, _f) {}
-		RepeatingFlashPacket(const ParameterList& v) : FlashPacket(packet_name, v) {}
-
+		constexpr static uint8_t packet_type{ PT_REPEATING_FLASH };
+		RepeatingFlashPacket() : FlashPacket(packet_type) {}
+		RepeatingFlashPacket(uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // C2S
+			: FlashPacket(packet_type, _r, _g, _b, _p, _f) {}
+		RepeatingFlashPacket(uint16_t _id, uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // S2C
+			: FlashPacket(packet_type, _id, _r, _g, _b, _p, _f) {}
+		RepeatingFlashPacket(std::istream& is) : FlashPacket(packet_type, is) {}
 		void Discard() {
 			is_available = false;
 		}
@@ -385,16 +380,12 @@ namespace Messages {
 
 	class RemoveRepeatingFlashPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "rrfl" };
-		RemoveRepeatingFlashPacket() : PlayerPacket(packet_name) {} // C2S
-		RemoveRepeatingFlashPacket(int _id) : PlayerPacket(packet_name, _id) {} // S2C
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			return r;
-		};
-		RemoveRepeatingFlashPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)) {}
+		constexpr static uint8_t packet_type{ PT_REMOVE_REPEATING_FLASH };
+		RemoveRepeatingFlashPacket() : PlayerPacket(packet_type) {} // C2S
+		RemoveRepeatingFlashPacket(uint16_t _id) : PlayerPacket(packet_type, _id) {} // S2C
+		RemoveRepeatingFlashPacket(std::istream& is) : PlayerPacket(packet_type, is) {}
+	private:
+		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
 	};
 
 	/**
@@ -403,22 +394,20 @@ namespace Messages {
 
 	class HiddenPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "h" };
-		HiddenPacket() : PlayerPacket(packet_name) {}
-		HiddenPacket(int _hidden_bin) // C2S
-			: PlayerPacket(packet_name), hidden_bin(_hidden_bin) {}
-		HiddenPacket(int _id, int _hidden_bin) // S2C
-			: PlayerPacket(packet_name, _id), hidden_bin(_hidden_bin) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, hidden_bin);
-			return r;
+		constexpr static uint8_t packet_type{ PT_HIDDEN };
+		HiddenPacket() : PlayerPacket(packet_type) {}
+		HiddenPacket(uint8_t _is_hidden) // C2S
+			: PlayerPacket(packet_type), is_hidden(_is_hidden) {}
+		HiddenPacket(uint16_t _id, uint8_t _is_hidden) // S2C
+			: PlayerPacket(packet_type, _id), is_hidden(_is_hidden) {}
+		HiddenPacket(std::istream& is) : PlayerPacket(packet_type, is),
+			is_hidden(ReadU8(is)) {}
+		bool is_hidden{false};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, is_hidden);
 		};
-		HiddenPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)),
-			hidden_bin(Decode<int>(v.at(1))) {}
-		int hidden_bin{0};
 	};
 
 	/**
@@ -427,52 +416,49 @@ namespace Messages {
 
 	class SystemPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "sys" };
-		SystemPacket() : PlayerPacket(packet_name) {}
+		constexpr static uint8_t packet_type{ PT_SYSTEM };
+		SystemPacket() : PlayerPacket(packet_type) {}
 		SystemPacket(std::string _name) // C2S
-			: PlayerPacket(packet_name), name(std::move(_name)) {}
-		SystemPacket(int _id, std::string _name) // S2C
-			: PlayerPacket(packet_name, _id), name(std::move(_name)) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, name);
-			return r;
+			: PlayerPacket(packet_type), name(std::move(_name)) {}
+		SystemPacket(uint16_t _id, std::string _name) // S2C
+			: PlayerPacket(packet_type, _id), name(std::move(_name)) {}
+		SystemPacket(std::istream& is)
+			: PlayerPacket(packet_type, is), name(DeSerializeString16(is)) {}
+		std::string name;
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, name);
 		};
-		SystemPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)), name(v.at(1)) {}
-		std::string name{""};
 	};
 
 	/**
 	 * Sound Effect
 	 */
 
-	class SEPacket : public PlayerPacket {
+	class SoundEffectPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "se" };
-		SEPacket() : PlayerPacket(packet_name) {}
-		SEPacket(lcf::rpg::Sound _d) // C2S
-			: PlayerPacket(packet_name), snd(std::move(_d)) {}
-		SEPacket(int _id, lcf::rpg::Sound _d) // S2C
-			: PlayerPacket(packet_name, _id), snd(std::move(_d)) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, snd.name, snd.volume, snd.tempo, snd.balance);
-			return r;
+		constexpr static uint8_t packet_type{ PT_SOUND_EFFECT };
+		SoundEffectPacket() : PlayerPacket(packet_type) {}
+		SoundEffectPacket(lcf::rpg::Sound _d) // C2S
+			: PlayerPacket(packet_type), snd(std::move(_d)) {}
+		SoundEffectPacket(uint16_t _id, lcf::rpg::Sound _d) // S2C
+			: PlayerPacket(packet_type, _id), snd(std::move(_d)) {}
+		SoundEffectPacket(std::istream& is) : PlayerPacket(packet_type, is), snd(BuildSound(is)) {}
+		lcf::rpg::Sound snd;
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, snd.name, (uint16_t)snd.volume, (uint16_t)snd.tempo, (uint16_t)snd.balance);
 		};
-		static lcf::rpg::Sound BuildSound(const ParameterList& v) {
+		static lcf::rpg::Sound BuildSound(std::istream& is) {
 			lcf::rpg::Sound s;
-			s.name = v.at(1);
-			s.volume = Decode<int>(v.at(2));
-			s.tempo = Decode<int>(v.at(3));
-			s.balance = Decode<int>(v.at(4));
+			s.name = DeSerializeString16(is);
+			s.volume = ReadU16(is);
+			s.tempo = ReadU16(is);
+			s.balance = ReadU16(is);
 			return s;
 		}
-		SEPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)), snd(BuildSound(v)) {}
-		lcf::rpg::Sound snd;
 	};
 
 	/**
@@ -481,41 +467,7 @@ namespace Messages {
 
 	class PicturePacket : public PlayerPacket {
 	public:
-		PicturePacket(std::string_view _packet_name, int _pic_id, Game_Pictures::Params& _p, // C2S
-				int _mx, int _my, int _panx, int _pany)
-			: PlayerPacket(std::move(_packet_name)), pic_id(_pic_id), params(_p),
-			map_x(_mx), map_y(_my), pan_x(_panx), pan_y(_pany) {}
-		PicturePacket(std::string_view _packet_name, int _id, int _pic_id, Game_Pictures::Params& _p, // S2C
-				int _mx, int _my, int _panx, int _pany)
-			: PlayerPacket(std::move(_packet_name), _id), pic_id(_pic_id), params(_p),
-			map_x(_mx), map_y(_my), pan_x(_panx), pan_y(_pany) {}
-		void Append(std::string& s) const {
-			PlayerPacket::Append(s);
-			AppendPartial(s, pic_id, params.position_x, params.position_y,
-					map_x, map_y, pan_x, pan_y,
-					params.magnify, params.top_trans, params.bottom_trans,
-					params.red, params.green, params.blue, params.saturation,
-					params.effect_mode, params.effect_power);
-		}
-		static void BuildParams(Game_Pictures::Params& p, const ParameterList& v) {
-			p.position_x = Decode<int>(v.at(2));
-			p.position_y = Decode<int>(v.at(3));
-			p.magnify = Decode<int>(v.at(8));
-			p.top_trans = Decode<int>(v.at(9));
-			p.bottom_trans = Decode<int>(v.at(10));
-			p.red = Decode<int>(v.at(11));
-			p.green = Decode<int>(v.at(12));
-			p.blue = Decode<int>(v.at(13));
-			p.saturation = Decode<int>(v.at(14));
-			p.effect_mode = Decode<int>(v.at(15));
-			p.effect_power = Decode<int>(v.at(16));
-		}
-		PicturePacket(std::string_view _packet_name, Game_Pictures::Params& _params, const ParameterList& v)
-			: PlayerPacket(std::move(_packet_name), v.at(0)), params(_params),
-			pic_id(Decode<int>(v.at(1))),
-			map_x(Decode<int>(v.at(4))), map_y(Decode<int>(v.at(5))),
-			pan_x(Decode<int>(v.at(6))), pan_y(Decode<int>(v.at(7))) {}
-		// skip Game_Pictures::Params&
+		// Skip Game_Pictures::Params&, reference cannot be assigned
 		PicturePacket& operator=(const PicturePacket& o) {
 			id = o.id;
 			pic_id = o.pic_id;
@@ -523,10 +475,45 @@ namespace Messages {
 			pan_x = o.pan_x; pan_y = o.pan_y;
 			return *this;
 		}
-		int pic_id;
+		uint16_t pic_id{0};
+		int16_t map_x{0}, map_y{0};
+		int16_t pan_x{0}, pan_y{0};
 		Game_Pictures::Params& params;
-		int map_x, map_y;
-		int pan_x, pan_y;
+	protected:
+		PicturePacket(uint8_t _packet_type, uint16_t _pic_id, Game_Pictures::Params& _p, // C2S
+				int16_t _mx, int16_t _my, int16_t _panx, int16_t _pany)
+			: PlayerPacket(_packet_type), pic_id(_pic_id), params(_p),
+			map_x(_mx), map_y(_my), pan_x(_panx), pan_y(_pany) {}
+		PicturePacket(uint8_t _packet_type, uint16_t _id, uint16_t _pic_id, Game_Pictures::Params& _p, // S2C
+				int16_t _mx, int16_t _my, int16_t _panx, int16_t _pany)
+			: PlayerPacket(_packet_type, _id), pic_id(_pic_id), params(_p),
+			map_x(_mx), map_y(_my), pan_x(_panx), pan_y(_pany) {}
+		PicturePacket(uint8_t _packet_type, Game_Pictures::Params& _params, std::istream& is)
+			: PlayerPacket(_packet_type, is), params(_params),
+			pic_id(ReadU16(is)),
+			map_x(ReadS16(is)), map_y(ReadS16(is)),
+			pan_x(ReadS16(is)), pan_y(ReadS16(is)) {}
+		void Serialize(std::ostream& os) const {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, pic_id, map_x, map_y, pan_x, pan_y,
+				(int16_t)params.position_x, (int16_t)params.position_y,
+				(int16_t)params.magnify, (int16_t)params.top_trans, (int16_t)params.bottom_trans,
+				(uint8_t)params.red, (uint8_t)params.green, (uint8_t)params.blue, (uint8_t)params.saturation,
+				(int16_t)params.effect_mode, (int16_t)params.effect_power);
+		}
+		static void BuildParams(Game_Pictures::Params& p, std::istream& is) {
+			p.position_x = ReadS16(is);
+			p.position_y = ReadS16(is);
+			p.magnify = ReadS16(is);
+			p.top_trans = ReadS16(is);
+			p.bottom_trans = ReadS16(is);
+			p.red = ReadU8(is);
+			p.green = ReadU8(is);
+			p.blue = ReadU8(is);
+			p.saturation = ReadU8(is);
+			p.effect_mode = ReadS16(is);
+			p.effect_power = ReadS16(is);
+		}
 	};
 
 	/**
@@ -535,31 +522,30 @@ namespace Messages {
 
 	class ShowPicturePacket : public PicturePacket {
 	public:
-		constexpr static std::string_view packet_name{ "ap" };
-		ShowPicturePacket() : PicturePacket(packet_name, 0, params, 0, 0, 0, 0) {}
-		ShowPicturePacket(int _pid, Game_Pictures::ShowParams _p, // C2S
-				int _mx, int _my, int _px, int _py)
-			: PicturePacket(packet_name, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
-		ShowPicturePacket(int _id, int _pid, Game_Pictures::ShowParams _p, // S2C
-				int _mx, int _my, int _px, int _py)
-			: PicturePacket(packet_name, _id, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PicturePacket::Append(r);
-			AppendPartial(r, params.name, params.use_transparent_color, params.fixed_to_map);
-			return r;
+		constexpr static uint8_t packet_type{ PT_SHOW_PICTURE };
+		ShowPicturePacket() : PicturePacket(packet_type, 0, params, 0, 0, 0, 0) {}
+		ShowPicturePacket(uint16_t _pid, Game_Pictures::ShowParams _p, // C2S
+				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
+			: PicturePacket(packet_type, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+		ShowPicturePacket(uint16_t _id, uint16_t _pid, Game_Pictures::ShowParams _p, // S2C
+				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
+			: PicturePacket(packet_type, _id, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+		ShowPicturePacket(std::istream& is)
+			: PicturePacket(packet_type, params, is), params(BuildParams(is)) {}
+		Game_Pictures::ShowParams params;
+	private:
+		void Serialize(std::ostream& os) const override {
+			PicturePacket::Serialize(os);
+			WritePartial(os, params.name, (uint8_t)params.use_transparent_color, (uint8_t)params.fixed_to_map);
 		}
-		Game_Pictures::ShowParams BuildParams(const ParameterList& v) const {
+		Game_Pictures::ShowParams BuildParams(std::istream& is) const {
 			Game_Pictures::ShowParams p;
-			PicturePacket::BuildParams(p, v);
-			p.name = v.at(17);
-			p.use_transparent_color = Decode<bool>(v.at(18));
-			p.fixed_to_map = Decode<bool>(v.at(19));
+			PicturePacket::BuildParams(p, is);
+			p.name = DeSerializeString16(is);
+			p.use_transparent_color = (bool)ReadU8(is);
+			p.fixed_to_map = (bool)ReadU8(is);
 			return p;
 		}
-		ShowPicturePacket(const ParameterList& v)
-			: PicturePacket(packet_name, params, v), params(BuildParams(v)) {}
-		Game_Pictures::ShowParams params;
 	};
 
 	/**
@@ -568,29 +554,28 @@ namespace Messages {
 
 	class MovePicturePacket : public PicturePacket {
 	public:
-		constexpr static std::string_view packet_name{ "mp" };
-		MovePicturePacket() : PicturePacket(packet_name, 0, params, 0, 0, 0, 0) {}
-		MovePicturePacket(int _pid, Game_Pictures::MoveParams _p, // C2S
-				int _mx, int _my, int _px, int _py)
-			: PicturePacket(packet_name, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
-		MovePicturePacket(int _id, int _pid, Game_Pictures::MoveParams _p, // S2C
-				int _mx, int _my, int _px, int _py)
-			: PicturePacket(packet_name, _id, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PicturePacket::Append(r);
-			AppendPartial(r, params.duration);
-			return r;
+		constexpr static uint8_t packet_type{ PT_MOVE_PICTRUE };
+		MovePicturePacket() : PicturePacket(packet_type, 0, params, 0, 0, 0, 0) {}
+		MovePicturePacket(uint16_t _pid, Game_Pictures::MoveParams _p, // C2S
+				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
+			: PicturePacket(packet_type, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+		MovePicturePacket(uint16_t _id, uint16_t _pid, Game_Pictures::MoveParams _p, // S2C
+				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
+			: PicturePacket(packet_type, _id, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+		MovePicturePacket(std::istream& is)
+			: PicturePacket(packet_type, params, is), params(BuildParams(is)) {}
+		Game_Pictures::MoveParams params;
+	private:
+		void Serialize(std::ostream& os) const override {
+			PicturePacket::Serialize(os);
+			WritePartial(os, (int16_t)params.duration);
 		}
-		Game_Pictures::MoveParams BuildParams(const ParameterList& v) const {
+		Game_Pictures::MoveParams BuildParams(std::istream& is) const {
 			Game_Pictures::MoveParams p;
-			PicturePacket::BuildParams(p, v);
-			p.duration = Decode<int>(v.at(17));
+			PicturePacket::BuildParams(p, is);
+			p.duration = ReadS16(is);
 			return p;
 		}
-		MovePicturePacket(const ParameterList& v)
-			: PicturePacket(packet_name, params, v), params(BuildParams(v)) {}
-		Game_Pictures::MoveParams params;
 	};
 
 	/**
@@ -599,19 +584,18 @@ namespace Messages {
 
 	class ErasePicturePacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "rp" };
-		ErasePicturePacket() : PlayerPacket(packet_name) {}
-		ErasePicturePacket(int _pid) : PlayerPacket(packet_name), pic_id(_pid) {} // C2S
-		ErasePicturePacket(int _id, int _pid) : PlayerPacket(packet_name, _id), pic_id(_pid) {} // S2C
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, pic_id);
-			return r;
+		constexpr static uint8_t packet_type{ PT_ERASE_PICTURE };
+		ErasePicturePacket() : PlayerPacket(packet_type) {}
+		ErasePicturePacket(uint16_t _pid) : PlayerPacket(packet_type), pic_id(_pid) {} // C2S
+		ErasePicturePacket(uint16_t _id, uint16_t _pid) : PlayerPacket(packet_type, _id), pic_id(_pid) {} // S2C
+		ErasePicturePacket(std::istream& is)
+			: PlayerPacket(packet_type, is), pic_id(ReadU16(is)) {}
+		uint16_t pic_id{0};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, pic_id);
 		}
-		ErasePicturePacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)), pic_id(Decode<int>(v.at(1))) {}
-		int pic_id;
 	};
 
 	/**
@@ -620,21 +604,20 @@ namespace Messages {
 
 	class ShowPlayerBattleAnimPacket : public PlayerPacket {
 	public:
-		constexpr static std::string_view packet_name{ "ba" };
-		ShowPlayerBattleAnimPacket() : PlayerPacket(packet_name) {}
-		ShowPlayerBattleAnimPacket(int _anim_id) // C2S
-			: PlayerPacket(packet_name), anim_id(_anim_id) {}
-		ShowPlayerBattleAnimPacket(int _id, int _anim_id) // S2C
-			: PlayerPacket(packet_name, _id), anim_id(_anim_id) {}
-		std::string ToBytes() const override {
-			std::string r {GetName()};
-			PlayerPacket::Append(r);
-			AppendPartial(r, anim_id);
-			return r;
+		constexpr static uint8_t packet_type{ PT_SHOW_PLAYER_BATTLE_ANIM };
+		ShowPlayerBattleAnimPacket() : PlayerPacket(packet_type) {}
+		ShowPlayerBattleAnimPacket(uint16_t _anim_id) // C2S
+			: PlayerPacket(packet_type), anim_id(_anim_id) {}
+		ShowPlayerBattleAnimPacket(uint16_t _id, uint16_t _anim_id) // S2C
+			: PlayerPacket(packet_type, _id), anim_id(_anim_id) {}
+		ShowPlayerBattleAnimPacket(std::istream& is)
+			: PlayerPacket(packet_type, is), anim_id(ReadU16(is)) {}
+		uint16_t anim_id{0};
+	private:
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, anim_id);
 		}
-		ShowPlayerBattleAnimPacket(const ParameterList& v)
-			: PlayerPacket(packet_name, v.at(0)), anim_id(Decode<int>(v.at(1))) {}
-		int anim_id;
 	};
 
 	/**
@@ -643,102 +626,17 @@ namespace Messages {
 
 	class ConfigPacket : public Packet {
 	public:
-		constexpr static std::string_view packet_name{ "cfg" };
+		constexpr static uint8_t packet_type{ PT_CONFIG };
 		ConfigPacket() {}
-		ConfigPacket(int _type, std::string _config)
-			: Packet(packet_name), type(_type), config(std::move(_config)) {} // S2C
-		std::string ToBytes() const override { return Build(type, config); }
-		ConfigPacket(const ParameterList& v)
-			: Packet(packet_name), type(Decode<int>(v.at(0))), config(v.at(1)) {}
-		int type;
+		ConfigPacket(uint8_t _type, std::string _config) // S2C
+			: Packet(packet_type), type(_type), config(std::move(_config)) {}
+		ConfigPacket(std::istream& is)
+			: Packet(packet_type), type(ReadU8(is)), config(DeSerializeString16(is)) {}
+		uint8_t type{0}; // 0: picture_names, 1: picture_prefixes, 2: virtual_3d
 		std::string config;
+	private:
+		void Serialize(std::ostream& os) const override { WritePartial(os, type, config); }
 	};
-
-	/**
-	 * Allowed Battle Animation Ids
-	 */
-
-	class BattleAnimIdListSyncPacket : public Packet {
-	public:
-		constexpr static std::string_view packet_name{ "bas" };
-		BattleAnimIdListSyncPacket() : Packet(packet_name) {}
-		BattleAnimIdListSyncPacket(const ParameterList& v) : Packet(packet_name) {
-			std::transform(v.begin(), v.end(), std::back_inserter(ids),
-				[&](std::string_view s) {
-					return Decode<int>(s);
-				});
-		}
-		std::vector<int> ids;
-	};
-
-	// ->> unused code
-
-	/**
-	 * Sync Switch
-	 */
-
-	class SyncSwitchPacket : public Packet {
-	public:
-		constexpr static std::string_view packet_name{ "ss" };
-		SyncSwitchPacket() : Packet(packet_name) {}
-		SyncSwitchPacket(int _switch_id, int _sync_type)
-			: Packet(packet_name), switch_id(_switch_id), sync_type(_sync_type) {}
-		std::string ToBytes() const override { return Build(switch_id, sync_type); }
-		SyncSwitchPacket(const ParameterList& v)
-			: Packet(packet_name), switch_id(Decode<int>(v.at(0))), sync_type(Decode<int>(v.at(1))) {}
-		int switch_id;
-		int sync_type;
-	};
-
-	/**
-	 * Sync Variable
-	 */
-
-	class SyncVariablePacket : public Packet {
-	public:
-		constexpr static std::string_view packet_name{ "sv" };
-		SyncVariablePacket() : Packet(packet_name) {}
-		SyncVariablePacket(int _var_id, int _value) : Packet(packet_name),
-			var_id(_var_id), sync_type(_value) {}
-		std::string ToBytes() const override { return Build(var_id, sync_type); }
-		SyncVariablePacket(const ParameterList& v)
-			: Packet(packet_name), var_id(Decode<int>(v.at(0))), sync_type(Decode<int>(v.at(1))) {}
-		int var_id;
-		int sync_type;
-	};
-
-	/**
-	 * Sync Event
-	 */
-
-	class SyncEventPacket : public Packet {
-	public:
-		constexpr static std::string_view packet_name{ "sev" };
-		SyncEventPacket() : Packet(packet_name) {}
-		SyncEventPacket(int _event_id, int _trigger_type) : Packet(packet_name),
-			event_id(_event_id), trigger_type(_trigger_type) {}
-		std::string ToBytes() const override { return Build(event_id, trigger_type); }
-		SyncEventPacket(const ParameterList& v)
-			: Packet(packet_name),
-			event_id(Decode<int>(v.at(0))), trigger_type(Decode<int>(v.at(1))) {}
-		int event_id;
-		int trigger_type;
-	};
-
-	/**
-	 * Sync Picture
-	 */
-
-	class SyncPicturePacket : public Packet {
-	public:
-		constexpr static std::string_view packet_name{ "sp" };
-		SyncPicturePacket() : Packet(packet_name) {}
-		SyncPicturePacket(const ParameterList& v)
-			: Packet(packet_name), picture_name(v.at(0)) {}
-		std::string picture_name;
-	};
-
-	// <<-
 }
 
 #endif

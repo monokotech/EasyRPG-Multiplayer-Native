@@ -18,14 +18,14 @@
 
 #include <thread>
 #include "client_connection.h"
+#include "messages.h"
 #include "../output.h"
 
 #ifndef EMSCRIPTEN
 #  include "socket.h"
 #endif
 
-constexpr size_t MAX_BULK_SIZE = Connection::MAX_QUEUE_SIZE -
-		Packet::MSG_DELIM.size();
+constexpr size_t QUEUE_MAX_BULK_SIZE = 4096;
 
 ClientConnection::ClientConnection() {
 #ifndef EMSCRIPTEN
@@ -72,6 +72,7 @@ void ClientConnection::HandleCloseOrTerm(bool terminated) {
 
 void ClientConnection::HandleData(std::string_view data) {
 	std::lock_guard lock(m_receive_mutex);
+	Print("Client Received: ", data);
 	if (data.size() == 4 && data.substr(0, 3) == "\uFFFD") {
 		std::string_view code = data.substr(3, 1);
 		if (code == "0")
@@ -121,6 +122,7 @@ void ClientConnection::Send(std::string_view data) {
 		return;
 #ifndef EMSCRIPTEN
 	socket->Send(data);
+	Print("Client Sent: ", data);
 #endif
 }
 
@@ -137,7 +139,7 @@ void ClientConnection::Receive() {
 }
 
 /**
- * Here are the four different states of (v != "room") == include:
+ * Here are the four different states of (e->GetType() != RoomPacket::packet_type) == include:
  *  1. true false: Collect other_pkt.
  *  2. false false: Convert from other_pkt to room_pkt and drain other_pkt(s).
  *  3. false true: Collect room_pkt.
@@ -145,25 +147,18 @@ void ClientConnection::Receive() {
  * In simple terms, room_pkt and other_pkt are collected separately for sending, without mixing them.
  */
 void ClientConnection::FlushQueue() {
-	auto namecmp = [] (std::string_view v, bool include) {
-		return (v != "room") == include;
-	};
-
 	bool include = false;
 	while (!m_queue.empty()) {
 		std::string bulk;
 		while (!m_queue.empty()) {
 			const auto& e = m_queue.front();
-			if (namecmp(e->GetName(), include))
+			if ((e->GetType() != Messages::RoomPacket::packet_type) == include)
 				break;
 			std::string data = std::move(e->ToBytes());
-			// prevent overflow
-			if (bulk.size() + data.size() > MAX_BULK_SIZE) {
+			if (bulk.size() + data.size() > QUEUE_MAX_BULK_SIZE) {
 				Send(bulk);
 				bulk.clear();
 			}
-			if (!bulk.empty())
-				bulk += Packet::MSG_DELIM;
 			bulk += data;
 			m_queue.pop();
 		}
