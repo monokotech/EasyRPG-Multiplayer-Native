@@ -488,7 +488,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/chatui.h
 	src/multiplayer/playerother.cpp
 	src/multiplayer/playerother.h
-	src/multiplayer/strfnd.h
+	src/multiplayer/util/strfnd.h
 	src/multiplayer/util/serialize.cpp
 	src/multiplayer/util/serialize.h
 	src/multiplayer/util/hexdump.cpp
@@ -902,10 +902,13 @@ if(PLAYER_MULTIPLAYER AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${LIBUV_PATH}"
 			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/libuv.patch )
 	endif()
-	set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-	set(BUILD_TESTING OFF)
-	set(LIBUV_BUILD_SHARED OFF)
-	add_subdirectory(${LIBUV_PATH})
+	function(add_libuv)
+		set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+		set(BUILD_TESTING OFF)
+		set(LIBUV_BUILD_SHARED OFF)
+		add_subdirectory(${LIBUV_PATH})
+	endfunction()
+	add_libuv()
 	target_link_libraries(${PROJECT_NAME} uv_a)
 endif()
 

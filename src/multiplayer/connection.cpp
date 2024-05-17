@@ -33,7 +33,7 @@ void Connection::ParseAddress(std::string address, std::string& host, uint16_t& 
 		}
 		host = address.substr(0, pos);
 		address.erase(0, pos + 2);
-		port = std::stoi(address);
+		port = atoi(address.c_str());
 		return;
 	}
 	pos = address.find(":");
@@ -43,7 +43,7 @@ void Connection::ParseAddress(std::string address, std::string& host, uint16_t& 
 	}
 	host = address.substr(0, pos);
 	address.erase(0, pos + 1);
-	port = std::stoi(address);
+	port = atoi(address.c_str());
 }
 
 void Connection::SendPacket(const Packet& p) {

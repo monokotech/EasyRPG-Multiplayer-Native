@@ -57,9 +57,9 @@ std::string GetPeerAddress(uv_tcp_t* handle) {
 			uv_ip6_name(addr_in6, host, 39);
 			port = ntohs(addr_in6->sin6_port);
 		}
-		return std::move(std::string(host) + " " + std::to_string(port));
+		return std::string(host) + " " + std::to_string(port);
 	}
-	return std::move(std::string("addr err = ") + uv_strerror(err));
+	return std::string("addr err = ") + uv_strerror(err);
 }
 
 int Resolve(const std::string& address, const uint16_t port,

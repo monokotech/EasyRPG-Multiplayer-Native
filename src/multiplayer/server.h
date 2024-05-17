@@ -60,10 +60,10 @@ public:
 	Game_ConfigMultiplayer GetConfig() const;
 
 	void ForEachClient(const std::function<void(ServerSideClient&)>& callback);
-	void DeleteClient(const int& id);
-	void SendTo(const int& from_client_id, const int& to_client_id,
-		const Messages::VisibilityType& visibility, const std::string& data,
-		const bool& return_flag = false);
+	void DeleteClient(const int id);
+	void SendTo(const int from_client_id, const int to_client_id,
+		const Messages::VisibilityType visibility, std::string_view data,
+		const bool return_flag = false);
 };
 
 ServerMain& Server();

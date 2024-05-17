@@ -43,7 +43,7 @@ struct SOCKS5 {
 			static_cast<char>(SOCKS5_DEFAULTS::SS_SUPPORT_AUTH),
 			static_cast<char>(SOCKS5_AUTH_TYPES::SS_NOAUTH)
 		};
-		return std::move(client_greeting_msg);
+		return client_greeting_msg;
 	}
 
 	static int CheckGreeting(const std::vector<char>& server_choice) {
@@ -68,7 +68,7 @@ struct SOCKS5 {
 			client_conn_request.push_back(destination_addr.at(i));
 		client_conn_request.push_back(static_cast<char>(destination_port >> 8));
 		client_conn_request.push_back(static_cast<char>(destination_port));
-		return std::move(client_conn_request);
+		return client_conn_request;
 	}
 
 	static int CheckConnectionRequest(const std::vector<char>& server_responce) {

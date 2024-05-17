@@ -21,7 +21,7 @@
 #include <thread>
 #include "../utils.h"
 #include "../output.h"
-#include "strfnd.h"
+#include "util/strfnd.h"
 
 #ifdef SERVER
 #  include <csignal>
@@ -155,8 +155,8 @@ class ServerSideClient {
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
 					std::to_string(id) + (name == "" ? "" : " " + name) + " left the server."));
 				Output::Info("S: room_id={} name={} left the server", room_id, name);
-				server->DeleteClient(id);
 			}
+			server->DeleteClient(id);
 		});
 
 		connection.RegisterHandler<RoomPacket>([this, Leave](RoomPacket& p) {
@@ -189,7 +189,6 @@ class ServerSideClient {
 
 				join_sent = true;
 			}
-
 		});
 		connection.RegisterHandler<ChatPacket>([this](ChatPacket& p) {
 			p.id = id;
@@ -310,7 +309,7 @@ class ServerSideClient {
 
 	template<typename T>
 	void SendLocalChat(const T& p) {
-		server->SendTo(id, 0, CV_LOCAL, p.ToBytes(), true);
+		server->SendTo(id, room_id, CV_LOCAL, p.ToBytes(), true);
 	}
 
 	template<typename T>
@@ -372,7 +371,7 @@ class ServerSideClient {
 		std::string bulk;
 		while (!queue.empty()) {
 			const auto& e = queue.front();
-			std::string data = std::move(e->ToBytes());
+			std::string data = e->ToBytes();
 			if (bulk.size() + data.size() > QUEUE_MAX_BULK_SIZE) {
 				FlushQueueSend(bulk, visibility, to_self);
 				bulk.clear();
@@ -410,15 +409,15 @@ public:
 		connection.Send(data);
 	}
 
-	const int& GetId() {
+	int GetId() const {
 		return id;
 	}
 
-	const int& GetRoomId() {
+	int GetRoomId() const {
 		return room_id;
 	}
 
-	const int& GetChatCryptKeyHash() {
+	int GetChatCryptKeyHash() const {
 		return chat_crypt_key_hash;
 	}
 };
@@ -443,17 +442,17 @@ void ServerMain::ForEachClient(const std::function<void(ServerSideClient&)>& cal
 	}
 }
 
-void ServerMain::DeleteClient(const int& id) {
+void ServerMain::DeleteClient(const int id) {
 	std::lock_guard lock(m_mutex);
 	clients.erase(id);
 }
 
-void ServerMain::SendTo(const int& from_id, const int& to_id,
-		const VisibilityType& visibility, const std::string& data,
-		const bool& return_flag) {
+void ServerMain::SendTo(const int from_id, const int to_id,
+		const VisibilityType visibility, std::string_view data,
+		const bool return_flag) {
 	if (!running) return;
-	auto data_to_send = new DataToSend{ from_id, to_id, visibility, data,
-			return_flag };
+	auto data_to_send = new DataToSend{ from_id, to_id, visibility,
+			std::string(data), return_flag };
 	{
 		std::lock_guard lock(m_mutex);
 		m_data_to_send_queue.emplace(data_to_send);
@@ -496,7 +495,7 @@ void ServerMain::Start(bool wait_thread) {
 						continue;
 					// send to local
 					if (data_to_send->visibility == Messages::CV_LOCAL &&
-							from_client && data_to_send->to_id == to_client->GetRoomId()) {
+							data_to_send->to_id == to_client->GetRoomId()) {
 						to_client->Send(data_to_send->data);
 					// send to crypt
 					} else if (data_to_send->visibility == Messages::CV_CRYPT &&
@@ -546,7 +545,7 @@ void ServerMain::Stop() {
 	running = false;
 	for (const auto& it : clients) {
 		it.second->Send("\uFFFD0");
-		// the client will be removed from HandleClose
+		// the client will be removed upon SystemMessage::CLOSE
 		it.second->Close();
 	}
 	if (server_listener_2)
@@ -593,9 +592,9 @@ int main(int argc, char *argv[])
 	while (true) {
 		const auto opt = getopt_long(argc, argv, short_opts, long_opts, nullptr);
 		if (opt == 'a')
-			cfg.server_bind_address.Set(std::string(optarg));
+			cfg.server_bind_address.Set(optarg);
 		else if (opt == 'A')
-			cfg.server_bind_address_2.Set(std::string(optarg));
+			cfg.server_bind_address_2.Set(optarg);
 		else if (opt == 'n')
 			cfg.no_heartbeats.Set(true);
 		else if (opt == 'c')
