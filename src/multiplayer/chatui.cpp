@@ -38,12 +38,14 @@
 #include "../game_variables.h"
 #include "../game_map.h"
 #include "game_multiplayer.h"
-#include "strfnd.h"
+#include "util/strfnd.h"
 #include "messages.h"
 
 #ifndef EMSCRIPTEN
 #  include "server.h"
 #endif
+
+namespace {
 
 class DrawableOnlineStatus : public Drawable {
 	Rect bounds;
@@ -173,12 +175,12 @@ class DrawableChatLog : public Drawable {
 		auto ExtractGlyphs = [](StringView str, int8_t color, GlyphLine& line, unsigned int& width) {
 			const auto* iter = str.data();
 			const auto* end = str.data() + str.size();
-			while(iter != end) {
+			while (iter != end) {
 				auto resp = Utils::TextNext(iter, end, 0);
 				iter = resp.next;
 
 				Rect ch_rect;
-				if(resp.is_exfont)
+				if (resp.is_exfont)
 					ch_rect = Text::GetSize(*Font::exfont, " ");
 				else
 					ch_rect = Font::Default()->GetSize(resp.ch);
@@ -189,8 +191,8 @@ class DrawableChatLog : public Drawable {
 		};
 		auto FindFirstGlyphOf = [](GlyphLine& line, char32_t ch) -> int {
 			unsigned int n_glyphs = line.size();
-			for(int i = 0; i < n_glyphs; i++) {
-				if(line[i].data.ch == ch) {
+			for (int i = 0; i < n_glyphs; i++) {
+				if (line[i].data.ch == ch) {
 					return i;
 				}
 			}
@@ -198,8 +200,8 @@ class DrawableChatLog : public Drawable {
 		};
 		auto FindLastGlyphOf = [](GlyphLine& line, char32_t ch) -> int {
 			unsigned int n_glyphs = line.size();
-			for(int i = n_glyphs-1; i >= 0; i--) {
-				if(line[i].data.ch == ch) {
+			for (int i = n_glyphs-1; i >= 0; i--) {
+				if (line[i].data.ch == ch) {
 					return i;
 				}
 			}
@@ -207,7 +209,7 @@ class DrawableChatLog : public Drawable {
 		};
 		auto MoveGlyphsToNext = [](GlyphLine& curr, GlyphLine& next,
 				unsigned int& curr_width, unsigned int& next_width, unsigned int amount) {
-			for(int i = 0; i < amount; i++) {
+			for (int i = 0; i < amount; i++) {
 				auto& glyph = curr.back();
 				unsigned int delta_width = glyph.dims.width;
 				next.insert(next.begin(), glyph);
@@ -219,7 +221,7 @@ class DrawableChatLog : public Drawable {
 		auto GetLineHeight = [](GlyphLine& line) -> unsigned int {
 			unsigned int height = 0;
 			unsigned int n_glyphs = line.size();
-			for(int i = 0; i < n_glyphs; i++) {
+			for (int i = 0; i < n_glyphs; i++) {
 				height = std::max<unsigned int>(height, line[i].dims.height);
 			}
 			return height;
@@ -257,11 +259,11 @@ class DrawableChatLog : public Drawable {
 
 		// break down message into fitting lines
 		do {
-			while(width_current > max_width) {
+			while (width_current > max_width) {
 				// as long as current line exceeds maximum width,
 				// move one word from this line down to the next one
 				int last_space = FindLastGlyphOf(glyphs_current, ' ');
-				if(break_word && last_space != -1 && last_space < glyphs_current.size()-1) {
+				if (break_word && last_space != -1 && last_space < glyphs_current.size()-1) {
 					// there is a word that can be moved down
 					MoveGlyphsToNext(glyphs_current, glyphs_next,
 						width_current, width_next, glyphs_current.size()-last_space-1);
@@ -274,7 +276,7 @@ class DrawableChatLog : public Drawable {
 			}
 			// once line fits, check for line breaks
 			int line_break = FindFirstGlyphOf(glyphs_current, '\n');
-			if(line_break != -1) {
+			if (line_break != -1) {
 				MoveGlyphsToNext(glyphs_current, glyphs_next,
 					width_current, width_next, glyphs_current.size()-line_break-1);
 			}
@@ -294,7 +296,7 @@ class DrawableChatLog : public Drawable {
 				last_glyph.color = 2;
 				break;
 			}
-		} while(glyphs_current.size() > 0);
+		} while (glyphs_current.size() > 0);
 
 		unsigned int message_padding = 1;
 		if (overlay_flag)
@@ -307,13 +309,13 @@ class DrawableChatLog : public Drawable {
 		if (overlay_flag)
 			text_img->Fill(Color(0, 0, 0, 102));
 		int n_lines = lines.size();
-		for(int i = 0; i < n_lines; i++) {
+		for (int i = 0; i < n_lines; i++) {
 			auto& line = lines[i];
 			int glyph_offset = 0;
-			for(int j = 0; j < line.first.size(); j++) {
+			for (int j = 0; j < line.first.size(); j++) {
 				auto& glyph = line.first[j];
 				auto ret = glyph.data;
-				if(EP_UNLIKELY(!ret)) continue;
+				if (EP_UNLIKELY(!ret)) continue;
 				if (glyph.color > -1) {
 					glyph_offset += Text::Draw(*text_img, glyph_offset+message_padding, line.second+message_padding,
 						*Font::Default(), *graphic, glyph.color, ret.ch, ret.is_exfont).x;
@@ -335,7 +337,7 @@ class DrawableChatLog : public Drawable {
 	}
 
 	void UpdateScrollBar() {
-		if(scroll_content_height <= bounds.height) {
+		if (scroll_content_height <= bounds.height) {
 			// hide scrollbar if content isn't large enough for scroll
 			scroll_box.SetX(bounds.x+bounds.width);
 			return;
@@ -367,7 +369,7 @@ class DrawableChatLog : public Drawable {
 	}
 
 	void RefreshMessages() {
-		for(int i = 0; i < messages.size(); i++)
+		for (int i = 0; i < messages.size(); i++)
 			messages[i].dirty = true;
 	}
 public:
@@ -407,23 +409,23 @@ public:
 		// y offset to draw next message, from bottom of log panel
 		int next_height = -scroll_position;
 		unsigned int n_messages = messages.size();
-		for(int i = n_messages-1; i >= 0; i--) {
+		for (int i = n_messages-1; i >= 0; i--) {
 			DrawableChatEntry& dmsg = messages[i];
 			// skip drawing hidden messages
-			if(!MessageVisible(dmsg, visibility_flags))
+			if (!MessageVisible(dmsg, visibility_flags))
 				continue;
 			auto rect = dmsg.render_graphic->GetRect();
 			// accumulate y offset
 			next_height += rect.height;
 			// skip drawing offscreen messages, but still accumulate y offset (bottom offscreen)
-			if(next_height <= 0)
+			if (next_height <= 0)
 				continue;
 			// cutoff message graphic so text does not bleed out of bounds
 			const unsigned int top_offscreen = std::max<int>(next_height-bounds.height, 0);
 			Rect cutoff_rect = Rect(rect.x, rect.y+top_offscreen,
 				rect.width, std::min<unsigned int>(rect.height, next_height)-top_offscreen);
 			// rebuild message graphic if needed
-			if(messages[i].dirty)
+			if (messages[i].dirty)
 				BuildMessageGraphic(dmsg);
 			// draw
 			unsigned int margin = message_margin;
@@ -432,7 +434,7 @@ public:
 			dst.Blit(bounds.x+margin, bounds.y+bounds.height-next_height+top_offscreen,
 				*(dmsg.render_graphic), cutoff_rect, Opacity::Opaque());
 			// stop drawing offscreen messages (top offscreen)
-			if(next_height > bounds.height)
+			if (next_height > bounds.height)
 				break;
 		}
 
@@ -451,7 +453,7 @@ public:
 		auto new_theme = Cache::SystemOrBlack();
 
 		// do nothing if theme hasn't changed
-		if(new_theme == current_theme)
+		if (new_theme == current_theme)
 			return;
 
 		current_theme = new_theme;
@@ -466,7 +468,7 @@ public:
 		BuildMessageGraphic(d_msg);
 		messages.push_back(d_msg);
 
-		if(MessageVisible(d_msg, visibility_flags)) {
+		if (MessageVisible(d_msg, visibility_flags)) {
 			scroll_content_height += d_msg.render_graphic->GetRect().height;
 			RefreshScroll();
 		}
@@ -474,10 +476,10 @@ public:
 
 	void RemoveChatEntry(ChatEntry* message_data) {
 		unsigned int n_msgs = messages.size();
-		for(int i = 0; i < n_msgs; i++) {
+		for (int i = 0; i < n_msgs; i++) {
 			DrawableChatEntry& d_msg = messages[i];
-			if(d_msg.message_data == message_data) {
-				if(MessageVisible(d_msg, visibility_flags)) {
+			if (d_msg.message_data == message_data) {
+				if (MessageVisible(d_msg, visibility_flags)) {
 					scroll_content_height -= d_msg.render_graphic->GetRect().height;
 					RefreshScroll();
 				}
@@ -531,23 +533,23 @@ public:
 		// if true, anchor has been found, so stop accumulating message heights
 		bool anchored = false;
 
-		for(int i = messages.size()-1; i >= 0; i--) {
+		for (int i = messages.size()-1; i >= 0; i--) {
 			// is message visible with previous visibility mask?
 			bool pre_vis = MessageVisible(messages[i], visibility_flags);
 			// is message visible with new visibility mask?
 			bool post_vis = MessageVisible(messages[i], new_visibility_flags);
 			unsigned int msg_height = messages[i].render_graphic->GetRect().height;
 			// accumulate total content height for new visibility flags
-			if(post_vis) new_content_height += msg_height;
+			if (post_vis) new_content_height += msg_height;
 
-			if(!anchored) {
-				if(pre_vis)
+			if (!anchored) {
+				if (pre_vis)
 					pre_anchor_y += msg_height;
-				if(post_vis)
+				if (post_vis)
 					post_anchor_y += msg_height;
 				// this message is an anchor candidate since it is visible both before and after
 				bool valid_anchor = pre_vis && post_vis;
-				if(valid_anchor && pre_anchor_y > 0) {
+				if (valid_anchor && pre_anchor_y > 0) {
 					// this is the bottommost anchorable message
 					anchored = true;
 				}
@@ -642,7 +644,7 @@ public:
 		type_char_offsets.clear();
 		Rect accumulated_rect;
 		const unsigned int n_chars = text.size();
-		for(int k = 0; k <= n_chars; k++) {
+		for (int k = 0; k <= n_chars; k++) {
 			// for every substring of sizes 0 to N, inclusive, starting at the left
 			std::u32string text_so_far = text.substr(0, k);
 			// absolute offset of character at this point (considering kerning of all previous ones)
@@ -670,10 +672,10 @@ public:
 		const unsigned int caret_offset = type_char_offsets[caret_index_head];
 		// caret's position relative to viewable portion of type box
 		const int relative_offset = caret_offset-scroll;
-		if(relative_offset < 0) {
+		if (relative_offset < 0) {
 			// caret escapes from left side. adjust
 			scroll += relative_offset;
-		} else if(relative_offset >= type_visible_width) {
+		} else if (relative_offset >= type_visible_width) {
 			// caret escapes from right side. adjust
 			scroll += relative_offset-type_visible_width;
 		}
@@ -720,7 +722,7 @@ class DrawableChatUi : public Drawable {
 	bool immersive_mode_flag = false;
 
 	void UpdateTypePanel() {
-		if(d_type.IsVisible()) {
+		if (d_type.IsVisible()) {
 			// SetCursorRect for some reason already has a padding of 8px relative to the window, so we fix it
 			const unsigned int f = -8;
 			const auto form_rect = d_type.GetFormBounds();
@@ -835,7 +837,7 @@ public:
 		d_type.SetVisible(focused);
 		UpdateTypePanel();
 		d_log.ShowScrollBar(focused);
-		if(focused) {
+		if (focused) {
 			d_log.SetHeight(Player::screen_height-status_height-type_height-panel_frame_right_bottom);
 			DisplayUi->StartTextInput();
 			UpdateTypeTextInputRect();
@@ -898,7 +900,7 @@ void AddLogEntry(
 	chat_log.push_back(std::make_unique<ChatEntry>(
 			a, b, c, d, e, _a, _b, _c, _d, _e, v, sys_name, true));
 	chat_box->AddLogEntry(chat_log.back().get());
-	if(chat_log.size() > MAXMESSAGES) {
+	if (chat_log.size() > MAXMESSAGES) {
 		chat_box->RemoveLogEntry(chat_log.front().get());
 		chat_log.erase(chat_log.begin());
 	}
@@ -915,7 +917,7 @@ void AddNotificationLogEntry(
 	chat_notification_log.push_back(std::make_unique<ChatEntry>(
 			a, b, c, d, e, _a, _b, _c, _d, _e, v, sys_name, false));
 	chat_box->AddNotificationLogEntry(chat_notification_log.back().get(), MAXNOTIFICATIONS);
-	if(chat_notification_log.size() > MAXNOTIFICATIONS)
+	if (chat_notification_log.size() > MAXNOTIFICATIONS)
 		chat_notification_log.erase(chat_notification_log.begin());
 }
 
@@ -1028,24 +1030,24 @@ void SetFocus(bool focused) {
 }
 
 void InputsFocusUnfocus() {
-	if(Input::IsTriggered(Input::InputButton::TOGGLE_CHAT)) {
+	if (Input::IsTriggered(Input::InputButton::TOGGLE_CHAT)) {
 		if (!Player::debug_flag || (Player::debug_flag
 				&& Input::IsKeyNotShared(Input::InputButton::TOGGLE_CHAT)))
 			SetFocus(true);
-	} else if(Input::IsExternalTriggered(Input::InputButton::TOGGLE_CHAT) ||
+	} else if (Input::IsExternalTriggered(Input::InputButton::TOGGLE_CHAT) ||
 			Input::IsExternalTriggered(Input::InputButton::KEY_ESCAPE)) {
 		SetFocus(false);
 	}
 }
 
 void InputsLog() {
-	if(Input::IsExternalPressed(Input::InputButton::KEY_UP)) {
+	if (Input::IsExternalPressed(Input::InputButton::KEY_UP)) {
 		chat_box->ScrollUp();
 	}
-	if(Input::IsExternalPressed(Input::InputButton::KEY_DOWN)) {
+	if (Input::IsExternalPressed(Input::InputButton::KEY_DOWN)) {
 		chat_box->ScrollDown();
 	}
-	if(Input::IsTriggered(Input::InputButton::TOGGLE_NOTIFICATIONS)) {
+	if (Input::IsTriggered(Input::InputButton::TOGGLE_NOTIFICATIONS)) {
 		if (!Player::debug_flag || (Player::debug_flag
 				&& Input::IsKeyNotShared(Input::InputButton::TOGGLE_NOTIFICATIONS)))
 		chat_box->ToggleNotificationLog();
@@ -1055,9 +1057,9 @@ void InputsLog() {
 void InputsTyping() {
 	// input and paste
 	std::string input_text = Input::GetExternalTextInput();
-	if(Input::IsExternalTriggered(Input::InputButton::KEY_V) && Input::IsExternalPressed(Input::InputButton::KEY_CTRL))
+	if (Input::IsExternalTriggered(Input::InputButton::KEY_V) && Input::IsExternalPressed(Input::InputButton::KEY_CTRL))
 		input_text = DisplayUi->GetClipboardText();
-	if(input_text.size() > 0) {
+	if (input_text.size() > 0) {
 		unsigned int caret_start = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		unsigned int caret_end = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		// erase selection
@@ -1069,7 +1071,7 @@ void InputsTyping() {
 	}
 
 	// erase
-	if(Input::IsExternalRepeated(Input::InputButton::KEY_BACKSPACE)) {
+	if (Input::IsExternalRepeated(Input::InputButton::KEY_BACKSPACE)) {
 		unsigned int caret_start = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		unsigned int caret_end = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		auto len = std::max<unsigned int>(1, caret_end-caret_start);
@@ -1084,8 +1086,8 @@ void InputsTyping() {
 	}
 
 	// copy
-	if(Input::IsExternalTriggered(Input::InputButton::KEY_C) && Input::IsExternalPressed(Input::InputButton::KEY_CTRL)) {
-		if(type_caret_index_tail != type_caret_index_head) {
+	if (Input::IsExternalTriggered(Input::InputButton::KEY_C) && Input::IsExternalPressed(Input::InputButton::KEY_CTRL)) {
+		if (type_caret_index_tail != type_caret_index_head) {
 			unsigned int caret_start = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 			unsigned int caret_end = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
 			std::u32string selected = type_text.substr(caret_start, caret_end-caret_start);
@@ -1094,24 +1096,24 @@ void InputsTyping() {
 	}
 
 	// move caret
-	if(Input::IsExternalRepeated(Input::InputButton::KEY_LEFT)) {
-		if(Input::IsExternalPressed(Input::InputButton::SHIFT)) {
-			if(type_caret_index_head > 0) type_caret_index_head--;
+	if (Input::IsExternalRepeated(Input::InputButton::KEY_LEFT)) {
+		if (Input::IsExternalPressed(Input::InputButton::SHIFT)) {
+			if (type_caret_index_head > 0) type_caret_index_head--;
 		} else {
-			if(type_caret_index_tail == type_caret_index_head) {
-				if(type_caret_index_head > 0) type_caret_index_head--;
+			if (type_caret_index_tail == type_caret_index_head) {
+				if (type_caret_index_head > 0) type_caret_index_head--;
 			} else {
 				type_caret_index_head = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 			}
 			type_caret_index_tail = type_caret_index_head;
 		}
 	}
-	if(Input::IsExternalRepeated(Input::InputButton::KEY_RIGHT)) {
-		if(Input::IsExternalPressed(Input::InputButton::SHIFT)) {
-			if(type_caret_index_head < type_text.size()) type_caret_index_head++;
+	if (Input::IsExternalRepeated(Input::InputButton::KEY_RIGHT)) {
+		if (Input::IsExternalPressed(Input::InputButton::SHIFT)) {
+			if (type_caret_index_head < type_text.size()) type_caret_index_head++;
 		} else {
-			if(type_caret_index_tail == type_caret_index_head) {
-				if(type_caret_index_head < type_text.size()) type_caret_index_head++;
+			if (type_caret_index_tail == type_caret_index_head) {
+				if (type_caret_index_head < type_text.size()) type_caret_index_head++;
 			} else {
 				type_caret_index_head = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
 			}
@@ -1120,8 +1122,8 @@ void InputsTyping() {
 	}
 
 	// send
-	if(Input::IsExternalTriggered(Input::InputButton::KEY_RETURN)) {
-		std::string text = std::move(Utils::EncodeUTF(type_text));
+	if (Input::IsExternalTriggered(Input::InputButton::KEY_RETURN)) {
+		std::string text = Utils::EncodeUTF(type_text);
 		Strfnd fnd(text);
 		std::string command = fnd.next(" ");
 		// command: !server
@@ -1247,6 +1249,8 @@ void ProcessInputs() {
 	InputsTyping();
 }
 
+} // end of namespace
+
 /**
  * External access
  */
@@ -1258,13 +1262,13 @@ ChatUi& ChatUi::Instance() {
 }
 
 void ChatUi::Refresh() {
-	if(chat_box == nullptr) return;
+	if (chat_box == nullptr) return;
 	// Do not add thread lock here to avoid deadlock
 	chat_box->RefreshTheme();
 }
 
 void ChatUi::Update() {
-	if(chat_box == nullptr) {
+	if (chat_box == nullptr) {
 		for (int e = Scene::SceneType::Title; e < Scene::SceneType::Map; ++e) {
 			if (Scene::Find(static_cast<Scene::SceneType>(e)) != nullptr)
 				Initialize();
@@ -1275,14 +1279,14 @@ void ChatUi::Update() {
 }
 
 void ChatUi::SetFocus(bool focused) {
-	if(chat_box == nullptr) return;
+	if (chat_box == nullptr) return;
 	const std::lock_guard<std::mutex> lock(chat_mutex);
 	::SetFocus(focused);
 }
 
 void ChatUi::GotMessage(int visibility, int room_id,
 		std::string name, std::string message, std::string sys_name) {
-	if(chat_box == nullptr)
+	if (chat_box == nullptr)
 		return;
 	const std::lock_guard<std::mutex> lock(chat_mutex);
 	VisibilityType v = static_cast<VisibilityType>(visibility);
@@ -1309,7 +1313,7 @@ void ChatUi::GotMessage(int visibility, int room_id,
 }
 
 void ChatUi::GotInfo(std::string message) {
-	if(chat_box == nullptr)
+	if (chat_box == nullptr)
 		return;
 	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", message, "", Messages::CV_LOCAL);
@@ -1317,7 +1321,7 @@ void ChatUi::GotInfo(std::string message) {
 }
 
 void ChatUi::SetStatusConnection(bool connected, bool connecting) {
-	if(chat_box == nullptr)
+	if (chat_box == nullptr)
 		return;
 	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->SetStatusConnection(connected, connecting);
@@ -1326,7 +1330,7 @@ void ChatUi::SetStatusConnection(bool connected, bool connecting) {
 }
 
 void ChatUi::SetStatusRoom(unsigned int room_id) {
-	if(chat_box == nullptr)
+	if (chat_box == nullptr)
 		return;
 	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->SetStatusRoom(room_id);

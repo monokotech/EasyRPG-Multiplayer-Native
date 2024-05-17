@@ -55,7 +55,7 @@
 #include "game_playerother.h"
 #include "playerother.h"
 #include "messages.h"
-#include "strfnd.h"
+#include "util/strfnd.h"
 
 #ifndef EMSCRIPTEN
 #  include "server.h"
@@ -494,7 +494,7 @@ Game_ConfigMultiplayer& Game_Multiplayer::GetConfig() {
 }
 
 void Game_Multiplayer::SetChatName(std::string chat_name) {
-	cfg.client_chat_name.Set(std::string(chat_name));
+	cfg.client_chat_name.Set(chat_name);
 	connection->SendPacket(NamePacket(cfg.client_chat_name.Get()));
 }
 
@@ -503,7 +503,7 @@ std::string Game_Multiplayer::GetChatName() {
 }
 
 void Game_Multiplayer::SetRemoteAddress(std::string address) {
-	cfg.client_remote_address.Set(std::string(address));
+	cfg.client_remote_address.Set(address);
 	connection->SetAddress(cfg.client_remote_address.Get());
 }
 
@@ -581,7 +581,7 @@ void Game_Multiplayer::Quit() {
 }
 
 void Game_Multiplayer::SendChatMessage(int visibility, std::string message, int crypt_key_hash) {
-	auto p = ChatPacket(visibility, message);
+	auto p = ChatPacket(visibility, std::move(message));
 	p.crypt_key_hash = crypt_key_hash;
 	connection->SendPacket(p);
 }

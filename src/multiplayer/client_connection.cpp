@@ -25,7 +25,7 @@
 #  include "socket.h"
 #endif
 
-constexpr size_t QUEUE_MAX_BULK_SIZE = 4096;
+static constexpr size_t QUEUE_MAX_BULK_SIZE = 4096;
 
 ClientConnection::ClientConnection() {
 #ifndef EMSCRIPTEN
@@ -85,7 +85,7 @@ void ClientConnection::HandleData(std::string_view data) {
 		m_system_queue.push(SystemMessage::TERMINATED);
 		return;
 	}
-	m_data_queue.push(std::move(std::string(data)));
+	m_data_queue.push(std::string(data));
 }
 
 void ClientConnection::Open() {
@@ -154,7 +154,7 @@ void ClientConnection::FlushQueue() {
 			const auto& e = m_queue.front();
 			if ((e->GetType() != Messages::RoomPacket::packet_type) == include)
 				break;
-			std::string data = std::move(e->ToBytes());
+			std::string data = e->ToBytes();
 			if (bulk.size() + data.size() > QUEUE_MAX_BULK_SIZE) {
 				Send(bulk);
 				bulk.clear();
