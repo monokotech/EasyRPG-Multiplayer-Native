@@ -39,6 +39,7 @@
 #include "../game_map.h"
 #include "game_multiplayer.h"
 #include "util/strfnd.h"
+#include "util/crypto.h"
 #include "messages.h"
 
 #ifndef EMSCRIPTEN
@@ -930,22 +931,6 @@ void AddClientInfo(std::string message) {
 	AddLogEntry("[Client]: ", message, "", Messages::CV_LOCAL);
 }
 
-std::string GetPasswordHash(const std::string& password, unsigned int iterations = 600000) {
-	return std::string("");
-}
-
-uint32_t StringToCRC32(std::string& value) {
-	return 0;
-}
-
-std::string EncryptMessage(const std::string& password, const std::string& plain) {
-	return std::string("");
-}
-
-std::string DecryptMessage(const std::string& password, const std::string& data, std::string& recovered) {
-	return std::string("");
-}
-
 bool SetChatVisibility(std::string visibility_name) {
 	auto it = Messages::VisibilityValues.find(visibility_name);
 	if (it != Messages::VisibilityValues.end()) {
@@ -958,8 +943,9 @@ bool SetChatVisibility(std::string visibility_name) {
 void SendKeyHash() {
 	if (chat_visibility == Messages::CV_CRYPT) {
 		std::string key = GMI().GetConfig().client_chat_crypt_key.Get();
+		std::istringstream key_iss(key);
 		// send a hash integer to help the server to search for clients with the same key
-		GMI().SendChatMessage(static_cast<int>(chat_visibility), "", StringToCRC32(key));
+		GMI().SendChatMessage(static_cast<int>(chat_visibility), "", Utils::CRC32(key_iss));
 	}
 }
 
@@ -1167,12 +1153,21 @@ void InputsTyping() {
 				std::string chat_crypt_password = fnd.next(" ");
 				if (chat_crypt_password != "") {
 					AddClientInfo("CRYPT: Generating encryption key ...");
+					auto GenerateKey = [chat_crypt_password]() {
+						std::string key;
+						CryptoError err = CryptoGetPasswordBase64Hash(chat_crypt_password, key);
+						if (err == CryptoError::CE_NO_ERROR) {
+							GMI().GetConfig().client_chat_crypt_key.Set(key);
+							SendKeyHash();
+							AddClientInfo("CRYPT: Done");
+						} else {
+							Output::Warning("CRYPT: Key generation failed. err = {}", CryptoErrString(err));
+						}
+					};
 #ifndef EMSCRIPTEN
-					std::thread([chat_crypt_password]() {
-						GMI().GetConfig().client_chat_crypt_key.Set(GetPasswordHash(chat_crypt_password));
-						SendKeyHash();
-						AddClientInfo("CRYPT: Done");
-					}).detach();
+					std::thread(GenerateKey).detach();
+#else
+					GenerateKey();
 #endif
 				}
 			}
@@ -1227,8 +1222,14 @@ void InputsTyping() {
 			if (text != "") {
 				if (chat_visibility == Messages::CV_CRYPT) {
 					std::string key = GMI().GetConfig().client_chat_crypt_key.Get();
-					GMI().SendChatMessage(static_cast<int>(chat_visibility),
-						EncryptMessage(key, text));
+					std::vector<char> cipher_data;
+					CryptoError err = CryptoEncryptText(key, text, cipher_data);
+					if (err == CryptoError::CE_NO_ERROR) {
+						GMI().SendChatMessage(static_cast<int>(chat_visibility),
+							std::string(cipher_data.data(), cipher_data.size()));
+					} else {
+						Output::Warning("CRYPT: Encrypt failed. err = {}", CryptoErrString(err));
+					}
 				} else
 					GMI().SendChatMessage(static_cast<int>(chat_visibility), text);
 			}
@@ -1294,11 +1295,14 @@ void ChatUi::GotMessage(int visibility, int room_id,
 	if (v == Messages::CV_CRYPT) {
 		std::string decrypted_message;
 		std::string key = GMI().GetConfig().client_chat_crypt_key.Get();
-		std::string error = DecryptMessage(key, message, decrypted_message);
-		if (error != "") {
-			AddLogEntry("", error, "", Messages::CV_LOCAL);
-		} else
+		std::vector<char> cipher_data(message.begin(), message.end());
+		CryptoError err = CryptoDecryptText(key, cipher_data, decrypted_message);
+		if (err == CryptoError::CE_NO_ERROR) {
 			message = decrypted_message;
+		} else {
+			Output::WarningNoChat("CRYPT: Decrypt failed. err = {}", CryptoErrString(err));
+			message = "<unencrypted data>";
+		}
 	}
 	auto it = Messages::VisibilityNames.find(v);
 	if (it != Messages::VisibilityNames.end())

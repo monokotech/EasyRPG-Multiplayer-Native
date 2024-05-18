@@ -19,6 +19,7 @@ Remember to switch to the `dev` branch, as many updates will be submitted there 
 
 - [liblcf] for RPG Maker data reading.
 - [libuv] for multiplayer networking.
+- [libsodium] for multiplayer chat.
 - SDL2 >= 2.0.5 for screen backend support.
 - Pixman for low level pixel manipulation.
 - libpng for PNG image support.
@@ -129,6 +130,7 @@ EasyRPG Player makes use of the following 3rd party software:
 [minetest util]: https://github.com/minetest/minetest
 [socks5.h]: https://github.com/harsath/SOCKS5-Proxy-Handler
 [libuv]: https://github.com/libuv/libuv
+[libsodium]: https://github.com/jedisct1/libsodium
 [BUILDING document]: docs/BUILDING.md
 [#easyrpg at irc.libera.chat]: https://kiwiirc.com/nextclient/#ircs://irc.libera.chat/#easyrpg?nick=rpgguest??
 [COPYING]: COPYING
