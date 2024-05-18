@@ -493,6 +493,10 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/util/serialize.h
 	src/multiplayer/util/hexdump.cpp
 	src/multiplayer/util/hexdump.h
+	src/multiplayer/util/crypto.cpp
+	src/multiplayer/util/crypto.h
+	src/multiplayer/util/base64.cpp
+	src/multiplayer/util/base64.h
 )
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
@@ -915,6 +919,29 @@ endif()
 if(BUILD_CLIENT) # BUILD_CLIENT
 
 if(PLAYER_MULTIPLAYER)
+	set(LIBSODIUM_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/libsodium-cmake")
+	set(LIBSODIUM_SOURCES "${LIBSODIUM_CMAKE_PATH}/libsodium")
+	if(NOT EXISTS ${LIBSODIUM_CMAKE_PATH})
+		find_package(Git REQUIRED)
+		# Source: https://github.com/robinlinden/libsodium-cmake
+		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
+			"-c" "advice.detachedHead=false" "--branch"
+			"2022"
+			"https://github.com/monokotech/libsodium-cmake"
+			"${LIBSODIUM_CMAKE_PATH}")
+		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
+			"-c" "advice.detachedHead=false" "--branch"
+			"1.0.18"
+			"https://github.com/jedisct1/libsodium"
+			"${LIBSODIUM_SOURCES}")
+	endif()
+	function(add_libsodium)
+		set(BUILD_SHARED_LIBS OFF)
+		set(SODIUM_DISABLE_TESTS ON)
+		add_subdirectory(${LIBSODIUM_CMAKE_PATH})
+	endfunction()
+	add_libsodium()
+	target_link_libraries(${PROJECT_NAME} sodium)
 endif()
 
 # Detect all required libraries
