@@ -21,11 +21,40 @@
 
 #include <functional>
 #include <string>
-#include <cstring>
 #include <memory>
 #include <queue>
 #include <mutex>
 #include "uv.h"
+
+/**
+ * DataHandler
+ */
+
+class DataHandler {
+public:
+	constexpr static size_t BUFFER_SIZE = 4096;
+	constexpr static size_t HEAD_SIZE = sizeof(uint16_t);
+
+	std::function<void(std::string_view data)> OnData;
+
+	std::string MakeBuffer(std::string_view data);
+
+	void GotBuffer(const char *buf, ssize_t buf_used);
+
+	std::function<void(std::string_view data)> OnWarning;
+
+private:
+	void InternalOnData(const char* buf, const ssize_t size) {
+		std::string_view data(reinterpret_cast<const char*>(buf), size);
+		OnData(data);
+	}
+
+	bool got_head = false;
+	uint16_t data_size = 0;
+	uint16_t begin = 0;
+	char tmp_buf[BUFFER_SIZE];
+	uint16_t tmp_buf_used = 0;
+};
 
 /**
  * Socket
@@ -33,9 +62,6 @@
 
 class Socket {
 public:
-	constexpr static size_t BUFFER_SIZE = 4096;
-	constexpr static size_t HEAD_SIZE = sizeof(uint16_t);
-
 	Socket();
 
 	enum class AsyncCall {
@@ -68,11 +94,6 @@ public:
 	std::function<void(std::string_view data)> OnWarning;
 
 private:
-	void InternalOnData(const char* buf, const ssize_t num_bytes) {
-		std::string_view data(reinterpret_cast<const char*>(buf), num_bytes);
-		OnData(data);
-	}
-
 	std::mutex m_call_mutex;
 	std::queue<AsyncCall> m_request_queue;
 
@@ -88,7 +109,7 @@ private:
 	uint64_t read_timeout_ms = 0;
 
 	// use queue: buffers must remain valid while sending
-	std::queue<std::unique_ptr<std::vector<char>>> m_send_queue;
+	std::queue<std::string> m_send_queue;
 	bool is_sending = false;
 
 	bool is_initialized = false;
@@ -97,17 +118,7 @@ private:
 	void InternalClose();
 	void InternalSend();
 
-	struct StreamRead {
-		Socket *socket;
-
-		bool got_head = false;
-		uint16_t data_size = 0;
-		uint16_t begin = 0;
-		char tmp_buf[BUFFER_SIZE];
-		uint16_t tmp_buf_used = 0;
-
-		void Handle(char *buf, ssize_t buf_used);
-	} stream_read;
+	DataHandler data_handler;
 };
 
 /**

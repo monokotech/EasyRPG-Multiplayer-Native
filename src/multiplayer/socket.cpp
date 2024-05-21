@@ -18,6 +18,7 @@
 
 #include <thread>
 #include <vector>
+#include "util/serialize.h"
 #include "socket.h"
 #include "connection.h"
 #include "socks5.h"
@@ -72,9 +73,9 @@ int Resolve(const std::string& address, const uint16_t port,
 			std::to_string(port).c_str(), &hints);
 	if (!err) {
 		if (req.addrinfo->ai_family == AF_INET)
-			std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in));
+			memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in));
 		else if (req.addrinfo->ai_family == AF_INET6)
-			std::memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in6));
+			memcpy(addr, req.addrinfo->ai_addr, sizeof(struct sockaddr_in6));
 	}
 	if (req.addrinfo) {
 		uv_freeaddrinfo(req.addrinfo);
@@ -83,12 +84,90 @@ int Resolve(const std::string& address, const uint16_t port,
 }
 
 /**
+ * DataHandler
+ * + Resolve the issue of TCP packet sticking or unpacking
+ */
+
+std::string DataHandler::MakeBuffer(std::string_view data) {
+	return SerializeString16(data);
+}
+
+void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
+	while (begin < buf_used) {
+		uint16_t buf_remaining = buf_used-begin;
+		uint16_t tmp_buf_remaining = BUFFER_SIZE-tmp_buf_used;
+		if (tmp_buf_used > 0) {
+			if (got_head) {
+				uint16_t data_remaining = data_size-tmp_buf_used;
+				// There is enough temporary space to write into
+				if (data_remaining <= tmp_buf_remaining) {
+					if (data_remaining <= buf_remaining) {
+						memcpy(tmp_buf+tmp_buf_used, buf+begin, data_remaining);
+						InternalOnData(tmp_buf, data_size);
+						begin += data_remaining;
+					} else {
+						if (buf_remaining > 0) {
+							memcpy(tmp_buf+tmp_buf_used, buf+begin, buf_remaining);
+							tmp_buf_used += buf_remaining;
+						}
+						break; // Go to the next packet
+					}
+				} else {
+					OnWarning(std::string("DataHandler::GotBuffer exception (data): ")
+						.append("tmp_buf_used: ").append(std::to_string(tmp_buf_used))
+						.append(", data_size: ").append(std::to_string(data_size))
+						.append(", data_remaining: ").append(std::to_string(data_remaining)));
+				}
+				got_head = false;
+				tmp_buf_used = 0;
+				data_size = 0;
+			} else {
+				uint16_t head_remaining = HEAD_SIZE-tmp_buf_used;
+				if (head_remaining <= buf_remaining && head_remaining <= tmp_buf_remaining) {
+					memcpy(tmp_buf+tmp_buf_used, buf+begin, head_remaining);
+					data_size = ReadU16((uint8_t*)tmp_buf);
+					begin += head_remaining;
+					got_head = true;
+				}
+				tmp_buf_used = 0;
+			}
+		} else {
+			// The header can be taken out from buf_remaining
+			if (!got_head && HEAD_SIZE <= buf_remaining) {
+				data_size = ReadU16((uint8_t*)buf+begin);
+				begin += HEAD_SIZE;
+				got_head = true;
+			// Data can be taken out from buf_remaining
+			} else if (got_head && data_size <= buf_remaining) {
+				InternalOnData(buf+begin, data_size);
+				begin += data_size;
+				got_head = false;
+				data_size = 0;
+			} else if (buf_remaining < HEAD_SIZE || buf_remaining < data_size) {
+				if (buf_remaining > 0 && buf_remaining <= tmp_buf_remaining) {
+					memcpy(tmp_buf+tmp_buf_used, buf+begin, buf_remaining);
+					tmp_buf_used += buf_remaining;
+				}
+				break; // Go to the next packet
+			}
+		}
+		// Ignore empty data
+		if (got_head && data_size == 0) {
+			got_head = false;
+		}
+	}
+	begin = 0;
+}
+
+/**
  * Socket
  */
 
 Socket::Socket() {
-	stream_read.socket = this;
 	send_req.data = this;
+	// Wrapper is needed, the callback has not been assigned yet
+	data_handler.OnWarning = [this](std::string_view data) { OnWarning(data); };
+	data_handler.OnData = [this](std::string_view data) { OnData(data); };
 }
 
 void Socket::InitStream(uv_loop_t* loop) {
@@ -130,9 +209,7 @@ void Socket::SendRaw(const char* raw_buf, const size_t raw_size) {
 	if (!is_initialized || m_send_queue.size() > 100)
 		return;
 
-	auto buf = new std::vector<char>(raw_size);
-	std::memcpy(buf->data(), raw_buf, raw_size);
-	m_send_queue.emplace(buf);
+	m_send_queue.emplace(raw_buf, raw_size);
 
 	m_request_queue.push(AsyncCall::SEND);
 	uv_async_send(&async);
@@ -144,20 +221,15 @@ void Socket::Send(std::string_view data) {
 	if (!is_initialized || m_send_queue.size() > 100)
 		return;
 
-	const uint16_t data_size = data.size();
-	const uint16_t final_size = HEAD_SIZE+data_size;
-	auto buf = new std::vector<char>(final_size);
-	std::memcpy(buf->data(), &data_size, HEAD_SIZE);
-	std::memcpy(buf->data()+HEAD_SIZE, data.data(), data_size);
-	m_send_queue.emplace(buf);
+	m_send_queue.push(data_handler.MakeBuffer(data));
 
 	m_request_queue.push(AsyncCall::SEND);
 	uv_async_send(&async);
 }
 
 void Socket::InternalSend() {
-	const auto& vec_buf = m_send_queue.front();
-	uv_buf_t buf = uv_buf_init(vec_buf->data(), vec_buf->size());
+	std::string_view data = m_send_queue.front();
+	uv_buf_t buf = uv_buf_init(const_cast<char*>(data.data()), data.size());
 	uv_write(&send_req, reinterpret_cast<uv_stream_t*>(&stream), &buf, 1,
 			[](uv_write_t* req, int err) {
 		auto socket = static_cast<Socket*>(req->data);
@@ -175,77 +247,6 @@ void Socket::InternalSend() {
 	});
 }
 
-void Socket::StreamRead::Handle(char *buf, ssize_t buf_used) {
-	/**
-	 * Resolve the issue of TCP packet sticking or unpacking
-	 * Read/Write: Header (2 bytes) + Data (Maximum 64KiB)
-	 */
-	while (begin < buf_used) {
-		uint16_t buf_remaining = buf_used-begin;
-		uint16_t tmp_buf_remaining = BUFFER_SIZE-tmp_buf_used;
-		if (tmp_buf_used > 0) {
-			if (got_head) {
-				uint16_t data_remaining = data_size-tmp_buf_used;
-				// There is enough temporary space to write into
-				if (data_remaining <= tmp_buf_remaining) {
-					if (data_remaining <= buf_remaining) {
-						std::memcpy(tmp_buf+tmp_buf_used, buf+begin, data_remaining);
-						socket->InternalOnData(tmp_buf, data_size);
-						begin += data_remaining;
-					} else {
-						if (buf_remaining > 0) {
-							std::memcpy(tmp_buf+tmp_buf_used, buf+begin, buf_remaining);
-							tmp_buf_used += buf_remaining;
-						}
-						break; // Go to the next packet
-					}
-				} else {
-					socket->OnWarning(std::string(": StreamRead.exception (data): ")
-						.append("tmp_buf_used: ").append(std::to_string(tmp_buf_used))
-						.append(", data_size: ").append(std::to_string(data_size))
-						.append(", data_remaining: ").append(std::to_string(data_remaining)));
-				}
-				got_head = false;
-				tmp_buf_used = 0;
-				data_size = 0;
-			} else {
-				uint16_t head_remaining = HEAD_SIZE-tmp_buf_used;
-				if (head_remaining <= buf_remaining && head_remaining <= tmp_buf_remaining) {
-					std::memcpy(tmp_buf+tmp_buf_used, buf+begin, head_remaining);
-					std::memcpy(&data_size, tmp_buf, HEAD_SIZE);
-					begin += head_remaining;
-					got_head = true;
-				}
-				tmp_buf_used = 0;
-			}
-		} else {
-			// The header can be taken out from buf_remaining
-			if (!got_head && HEAD_SIZE <= buf_remaining) {
-				std::memcpy(&data_size, buf+begin, HEAD_SIZE);
-				begin += HEAD_SIZE;
-				got_head = true;
-			// Data can be taken out from buf_remaining
-			} else if (got_head && data_size <= buf_remaining) {
-				socket->InternalOnData(buf+begin, data_size);
-				begin += data_size;
-				got_head = false;
-				data_size = 0;
-			} else if (buf_remaining < HEAD_SIZE || buf_remaining < data_size) {
-				if (buf_remaining > 0 && buf_remaining <= tmp_buf_remaining) {
-					std::memcpy(tmp_buf+tmp_buf_used, buf+begin, buf_remaining);
-					tmp_buf_used += buf_remaining;
-				}
-				break; // Go to the next packet
-			}
-		}
-		// Ignore empty data
-		if (got_head && data_size == 0) {
-			got_head = false;
-		}
-	}
-	begin = 0;
-}
-
 void Socket::Open() {
 	std::lock_guard lock(m_call_mutex);
 	m_request_queue.push(AsyncCall::OPEN);
@@ -255,11 +256,11 @@ void Socket::Open() {
 void Socket::InternalOpen() {
 	uv_read_start(reinterpret_cast<uv_stream_t*>(&stream),
 			[](uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
-		buf->base = new char[BUFFER_SIZE];
-		buf->len = BUFFER_SIZE;
+		buf->base = new char[DataHandler::BUFFER_SIZE];
+		buf->len = DataHandler::BUFFER_SIZE;
 	}, [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		auto socket = static_cast<Socket*>(stream->data);
-		StreamRead& stream_read = socket->stream_read;
+		DataHandler& data_handler = socket->data_handler;
 		if (nread < 0) {
 			// EOF means the connection is just closed remotely,
 			//  so do not output warnings
@@ -271,7 +272,7 @@ void Socket::InternalOpen() {
 			if (socket->OnRawData) {
 				socket->OnRawData(buf->base, nread);
 			} else {
-				stream_read.Handle(buf->base, nread);
+				data_handler.GotBuffer(buf->base, nread);
 			}
 		}
 		if (buf->base) {
