@@ -55,6 +55,7 @@
 #include "game_playerother.h"
 #include "playerother.h"
 #include "messages.h"
+#include "output_mt.h"
 #include "util/strfnd.h"
 
 #ifndef EMSCRIPTEN
@@ -165,7 +166,7 @@ void Game_Multiplayer::InitConnection() {
 				std::this_thread::sleep_for(std::chrono::seconds(3));
 				reconnect_wait = false;
 				if (active) {
-					Output::Info("MP: reconnecting: ID={}", room_id);
+					OutputMt::Info("MP: reconnecting: ID={}", room_id);
 					Connect();
 				}
 			}).detach();
@@ -822,6 +823,7 @@ void Game_Multiplayer::Update() {
 	if (active) {
 		connection->Receive();
 	}
+	OutputMt::Update();
 }
 
 void Game_Multiplayer::MapUpdate() {

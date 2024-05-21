@@ -25,7 +25,6 @@
 #include <type_traits>
 
 #include "packet.h"
-#include "../output.h"
 
 namespace Multiplayer {
 

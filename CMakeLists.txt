@@ -488,6 +488,8 @@ target_sources(${PROJECT_NAME} PRIVATE
 	src/multiplayer/chatui.h
 	src/multiplayer/playerother.cpp
 	src/multiplayer/playerother.h
+	src/multiplayer/output_mt.cpp
+	src/multiplayer/output_mt.h
 	src/multiplayer/util/strfnd.h
 	src/multiplayer/util/serialize.cpp
 	src/multiplayer/util/serialize.h
@@ -513,6 +515,7 @@ add_library(${PROJECT_NAME}_server OBJECT
 	src/multiplayer/connection.cpp
 	src/multiplayer/socket.cpp
 	src/multiplayer/packet.cpp
+	src/multiplayer/output_mt.cpp
 	src/multiplayer/util/serialize.cpp
 	src/multiplayer/util/hexdump.cpp
 )

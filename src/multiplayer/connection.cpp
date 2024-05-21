@@ -17,6 +17,7 @@
  */
 
 #include "connection.h"
+#include "output_mt.h"
 #include "util/hexdump.h"
 
 using namespace Multiplayer;
@@ -59,7 +60,7 @@ void Connection::Dispatch(const std::string_view data) {
 		if (it != handlers.end()) {
 			std::invoke(it->second, pkt_iss);
 		} else {
-			Output::Debug("Connection: Unregistered packet received");
+			OutputMt::Debug("Connection: Unregistered packet received");
 			break;
 		}
 		ReadU16(pkt_iss); // skip unused bytes
@@ -81,5 +82,5 @@ void Connection::Print(std::string_view tag, std::string_view data) {
 	if (data == std::string("\x00\x03\x01\x28\x28", 5)) { // heartbeat
 		return;
 	}
-	Output::Debug("{}{} bytes\n{}", tag, data.size(), HexDump(data));
+	OutputMt::Debug("{}{} bytes\n{}", tag, data.size(), HexDump(data));
 }

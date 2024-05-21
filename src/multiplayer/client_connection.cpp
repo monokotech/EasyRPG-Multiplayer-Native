@@ -19,7 +19,7 @@
 #include <thread>
 #include "client_connection.h"
 #include "messages.h"
-#include "../output.h"
+#include "output_mt.h"
 
 #ifndef EMSCRIPTEN
 #  include "socket.h"
@@ -76,9 +76,9 @@ void ClientConnection::HandleData(std::string_view data) {
 	if (data.size() == 4 && data.substr(0, 3) == "\uFFFD") {
 		std::string_view code = data.substr(3, 1);
 		if (code == "0")
-			Output::Warning("Server exited");
+			OutputMt::WarningStr("Server exited");
 		else if (code == "1")
-			Output::Warning("Access denied. Too many users");
+			OutputMt::WarningStr("Access denied. Too many users");
 		// Prevent callback to OnDisconnect,
 		//  ensure m_system_queue is empty for next connection
 		Close();
@@ -92,8 +92,8 @@ void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
 #ifndef EMSCRIPTEN
-	socket->OnInfo = [](std::string_view m) { Output::Info(m); };
-	socket->OnWarning = [](std::string_view m) { Output::Warning(m); };
+	socket->OnInfo = [](std::string_view m) { OutputMt::Info("{}", m); };
+	socket->OnWarning = [](std::string_view m) { OutputMt::Warning("{}", m); };
 	socket->SetReadTimeout(cfg->no_heartbeats.Get() ? 0 : 6000);
 	socket->SetRemoteAddress(addr_host, addr_port);
 	socket->ConfigSocks5(socks5_addr_host, socks5_addr_port);

@@ -20,7 +20,7 @@
 #include "socket.h"
 #include <thread>
 #include "../utils.h"
-#include "../output.h"
+#include "output_mt.h"
 #include "util/strfnd.h"
 
 #ifdef SERVER
@@ -62,8 +62,8 @@ public:
 	}
 
 	void Open() override {
-		socket->OnInfo = [](std::string_view m) { Output::Info("S: {}", m); };
-		socket->OnWarning = [](std::string_view m) { Output::Warning("S: {}", m); };
+		socket->OnInfo = [](std::string_view m) { OutputMt::Info("S: {}", m); };
+		socket->OnWarning = [](std::string_view m) { OutputMt::Warning("S: {}", m); };
 		socket->OnData = [this](auto p1) { HandleData(p1); };
 		socket->OnOpen = [this]() { HandleOpen(); };
 		socket->OnClose = [this]() { HandleClose(); };
@@ -154,7 +154,7 @@ class ServerSideClient {
 				Leave();
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
 					std::to_string(id) + (name == "" ? "" : " " + name) + " left the server."));
-				Output::Info("S: room_id={} name={} left the server", room_id, name);
+				OutputMt::Info("S: room_id={} name={} left the server", room_id, name);
 			}
 			server->DeleteClient(id);
 		});
@@ -181,7 +181,7 @@ class ServerSideClient {
 			if (!join_sent) {
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
 					std::to_string(id) + (name == "" ? "" : " " + name) + " joined the server."));
-				Output::Info("S: room_id={} name={} joined the server", room_id, name);
+				OutputMt::Info("S: room_id={} name={} joined the server", room_id, name);
 
 				SendSelfAsync(ConfigPacket(0, server->GetConfig().server_picture_names.Get()));
 				SendSelfAsync(ConfigPacket(1, server->GetConfig().server_picture_prefixes.Get()));
@@ -199,16 +199,16 @@ class ServerSideClient {
 			VisibilityType visibility = static_cast<VisibilityType>(p.visibility);
 			if (visibility == CV_LOCAL) {
 				SendLocalChat(p);
-				Output::Info("S: Chat: {} [LOCAL, {}]: {}", p.name, p.room_id, p.message);
+				OutputMt::Info("S: Chat: {} [LOCAL, {}]: {}", p.name, p.room_id, p.message);
 			} else if (visibility == CV_GLOBAL) {
 				SendGlobalChat(p);
-				Output::Info("S: Chat: {} [GLOBAL, {}]: {}", p.name, p.room_id, p.message);
+				OutputMt::Info("S: Chat: {} [GLOBAL, {}]: {}", p.name, p.room_id, p.message);
 			} else if (visibility == CV_CRYPT) {
 				// use "crypt_key_hash != 0" to distinguish whether to set or send
 				if (p.crypt_key_hash != 0) { // set
 					// the chat_crypt_key_hash is used for searching
 					chat_crypt_key_hash = p.crypt_key_hash;
-					Output::Info("S: Chat: {} [CRYPT, {}]: Update chat_crypt_key_hash: {}",
+					OutputMt::Info("S: Chat: {} [CRYPT, {}]: Update chat_crypt_key_hash: {}",
 						p.name, p.room_id, chat_crypt_key_hash);
 				} else { // send
 					SendCryptChat(p);
@@ -525,15 +525,15 @@ void ServerMain::Start(bool wait_thread) {
 
 	if (cfg.server_bind_address_2.Get() != "") {
 		server_listener_2.reset(new ServerListener(addr_host_2, addr_port_2));
-		server_listener_2->OnInfo = [](std::string_view m) { Output::Info("S: {}", m); };
-		server_listener_2->OnWarning = [](std::string_view m) { Output::Warning("S: {}", m); };
+		server_listener_2->OnInfo = [](std::string_view m) { OutputMt::Info("S: {}", m); };
+		server_listener_2->OnWarning = [](std::string_view m) { OutputMt::Warning("S: {}", m); };
 		server_listener_2->OnConnection = CreateServerSideClient;
 		server_listener_2->Start();
 	}
 
 	server_listener.reset(new ServerListener(addr_host, addr_port));
-	server_listener->OnInfo = [](std::string_view m) { Output::Info("S: {}", m); };
-	server_listener->OnWarning = [](std::string_view m) { Output::Warning("S: {}", m); };
+	server_listener->OnInfo = [](std::string_view m) { OutputMt::Info("S: {}", m); };
+	server_listener->OnWarning = [](std::string_view m) { OutputMt::Warning("S: {}", m); };
 	server_listener->OnConnection = CreateServerSideClient;
 	server_listener->Start(wait_thread);
 }
