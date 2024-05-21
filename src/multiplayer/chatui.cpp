@@ -23,7 +23,6 @@
 #include "../scene.h"
 #include "../scene_debug.h"
 #include "../bitmap.h"
-#include "../output.h"
 #include "../drawable_mgr.h"
 #include "../font.h"
 #include "../cache.h"
@@ -37,6 +36,7 @@
 #include "../game_switches.h"
 #include "../game_variables.h"
 #include "../game_map.h"
+#include "output_mt.h"
 #include "game_multiplayer.h"
 #include "util/strfnd.h"
 #include "util/crypto.h"
@@ -887,7 +887,6 @@ const unsigned int MAXNOTIFICATIONS = 3;
 std::u32string type_text;
 unsigned int type_caret_index_tail = 0; // anchored when SHIFT-selecting text
 unsigned int type_caret_index_head = 0; // moves when SHIFT-selecting text
-std::mutex chat_mutex;
 std::unique_ptr<DrawableChatUi> chat_box; // chat renderer
 std::vector<std::unique_ptr<ChatEntry>> chat_log;
 std::vector<std::unique_ptr<ChatEntry>> chat_notification_log;
@@ -927,7 +926,6 @@ void AddNotificationLogEntry(std::string a, std::string b, std::string c, Visibi
 }
 
 void AddClientInfo(std::string message) {
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("[Client]: ", message, "", Messages::CV_LOCAL);
 }
 
@@ -950,7 +948,6 @@ void SendKeyHash() {
 }
 
 void InitHello() {
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", "!! • IME input now supported!", "", Messages::CV_LOCAL);
 	AddLogEntry("", "!!   (for Japanese, etc.)", "", Messages::CV_LOCAL);
 	AddLogEntry("", "!! • You can now copy and", "", Messages::CV_LOCAL);
@@ -965,7 +962,6 @@ void InitHello() {
 }
 
 void ShowUsage() {
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
 	AddLogEntry("", "Usage:", "", Messages::CV_LOCAL);
 	AddLogEntry("", "[...] Optional | <...> Required", "", Messages::CV_LOCAL);
@@ -1152,16 +1148,16 @@ void InputsTyping() {
 			if (visibility_name == "CRYPT") {
 				std::string chat_crypt_password = fnd.next(" ");
 				if (chat_crypt_password != "") {
-					AddClientInfo("CRYPT: Generating encryption key ...");
 					auto GenerateKey = [chat_crypt_password]() {
+						OutputMt::Info("CRYPT: Generating encryption key ...");
 						std::string key;
 						CryptoError err = CryptoGetPasswordBase64Hash(chat_crypt_password, key);
 						if (err == CryptoError::CE_NO_ERROR) {
 							GMI().GetConfig().client_chat_crypt_key.Set(key);
 							SendKeyHash();
-							AddClientInfo("CRYPT: Done");
+							OutputMt::Info("CRYPT: Done");
 						} else {
-							Output::Warning("CRYPT: Key generation failed. err = {}", CryptoErrString(err));
+							OutputMt::Warning("CRYPT: Key generation failed. err = {}", CryptoErrString(err));
 						}
 					};
 #ifndef EMSCRIPTEN
@@ -1281,7 +1277,6 @@ void ChatUi::Update() {
 
 void ChatUi::SetFocus(bool focused) {
 	if (chat_box == nullptr) return;
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	::SetFocus(focused);
 }
 
@@ -1289,7 +1284,6 @@ void ChatUi::GotMessage(int visibility, int room_id,
 		std::string name, std::string message, std::string sys_name) {
 	if (chat_box == nullptr)
 		return;
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	VisibilityType v = static_cast<VisibilityType>(visibility);
 	std::string vtext = "?";
 	if (v == Messages::CV_CRYPT) {
@@ -1300,7 +1294,7 @@ void ChatUi::GotMessage(int visibility, int room_id,
 		if (err == CryptoError::CE_NO_ERROR) {
 			message = decrypted_message;
 		} else {
-			Output::WarningNoChat("CRYPT: Decrypt failed. err = {}", CryptoErrString(err));
+			Output::Warning("CRYPT: Decrypt failed. err = {}", CryptoErrString(err));
 			message = "<unencrypted data>";
 		}
 	}
@@ -1319,7 +1313,6 @@ void ChatUi::GotMessage(int visibility, int room_id,
 void ChatUi::GotInfo(std::string message) {
 	if (chat_box == nullptr)
 		return;
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	AddLogEntry("", message, "", Messages::CV_LOCAL);
 	AddNotificationLogEntry("", message, "", Messages::CV_LOCAL);
 }
@@ -1327,7 +1320,6 @@ void ChatUi::GotInfo(std::string message) {
 void ChatUi::SetStatusConnection(bool connected, bool connecting) {
 	if (chat_box == nullptr)
 		return;
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->SetStatusConnection(connected, connecting);
 	if (connected)
 		SendKeyHash();
@@ -1336,6 +1328,5 @@ void ChatUi::SetStatusConnection(bool connected, bool connecting) {
 void ChatUi::SetStatusRoom(unsigned int room_id) {
 	if (chat_box == nullptr)
 		return;
-	const std::lock_guard<std::mutex> lock(chat_mutex);
 	chat_box->SetStatusRoom(room_id);
 }

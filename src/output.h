@@ -188,15 +188,15 @@ namespace Output {
 #else // SERVER
 	template <typename FmtStr, typename... Args>
 	void Info(FmtStr&& fmtstr, Args&&... args);
+	void InfoStr(std::string const& msg);
 
 	template <typename FmtStr, typename... Args>
 	void Warning(FmtStr&& fmtstr, Args&&... args);
-
-	template <typename FmtStr, typename... Args>
-	[[noreturn]] void Error(FmtStr&& fmtstr, Args&&... args);
+	void WarningStr(std::string const& warn);
 
 	template <typename FmtStr, typename... Args>
 	void Debug(FmtStr&& fmtstr, Args&&... args);
+	void DebugStr(std::string const& msg);
 #endif // else SERVER
 }
 
@@ -238,26 +238,26 @@ inline std::string output_time() {
 
 template <typename FmtStr, typename... Args>
 inline void Output::Info(FmtStr&& fmtstr, Args&&... args) {
-	std::cout << output_time() << "Info: "
-		<< (fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...)) << std::endl;
+	InfoStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
 }
-
-template <typename FmtStr, typename... Args>
-inline void Output::Error(FmtStr&& fmtstr, Args&&... args) {
-	std::cerr << output_time() << "Error: "
-		<< (fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...)) << std::endl;
+inline void Output::InfoStr(std::string const& msg) {
+	std::cout << output_time() << "Info: " << msg << std::endl;
 }
 
 template <typename FmtStr, typename... Args>
 inline void Output::Warning(FmtStr&& fmtstr, Args&&... args) {
-	std::cout << output_time() << "Warning: "
-		<< (fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...)) << std::endl;
+	WarningStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
+}
+inline void Output::WarningStr(std::string const& warn) {
+	std::cout << output_time() << "Warning: " << warn << std::endl;
 }
 
 template <typename FmtStr, typename... Args>
 inline void Output::Debug(FmtStr&& fmtstr, Args&&... args) {
-	std::cout << output_time() << "Debug: "
-		<< (fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...)) << std::endl;
+	DebugStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
+}
+inline void Output::DebugStr(std::string const& msg) {
+	std::cout << output_time() << "Debug: " << msg << std::endl;
 }
 #endif // else SERVER
 

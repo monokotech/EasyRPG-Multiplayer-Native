@@ -42,10 +42,7 @@
 #include "message_overlay.h"
 #include "font.h"
 #include "baseui.h"
-
-#ifndef SERVER
-#  include "multiplayer/chatui.h"
-#endif
+#include "multiplayer/chatui.h"
 
 // fmt 7 has renamed the namespace
 #if FMT_VERSION < 70000
