@@ -156,6 +156,13 @@ Sdl2Ui::Sdl2Ui(long width, long height, const Game_Config& cfg) : BaseUi(cfg)
 			cfg.video.fullscreen.Get(),
 			cfg.video.vsync.Get());
 
+#ifdef EMSCRIPTEN
+	if (!vcfg.vsync.Get()) {
+		emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT,
+			vcfg.fps_limit.Get() > 0 ? 1000 / vcfg.fps_limit.Get() : 0);
+	}
+#endif
+
 	SetTitle(GAME_TITLE);
 
 #if (defined(USE_JOYSTICK) && defined(SUPPORT_JOYSTICK)) || (defined(USE_JOYSTICK_AXIS) && defined(SUPPORT_JOYSTICK_AXIS))
@@ -537,7 +544,19 @@ void Sdl2Ui::ToggleVsync() {
 	// Modifying vsync requires recreating the renderer
 	vcfg.vsync.Toggle();
 
+#ifdef EMSCRIPTEN
+	int err = 0;
+	if (vcfg.vsync.Get()) {
+		// render at every vsync
+		err = emscripten_set_main_loop_timing(EM_TIMING_RAF, 1);
+	} else {
+		err = emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT,
+			vcfg.fps_limit.Get() > 0 ? 1000 / vcfg.fps_limit.Get() : 0);
+	}
+	if (!err) {
+#else
 	if (SDL_RenderSetVSync(sdl_renderer, int(vcfg.vsync.Get())) == 0) {
+#endif
 		current_display_mode.vsync = vcfg.vsync.Get();
 		SetFrameRateSynchronized(vcfg.vsync.Get());
 	} else {
@@ -1276,11 +1295,8 @@ void Sdl2Ui::vGetConfig(Game_ConfigVideo& cfg) const {
 #ifdef EMSCRIPTEN
 	// Fullscreen is handled by the browser
 	cfg.fullscreen.SetOptionVisible(false);
-	cfg.fps_limit.SetOptionVisible(false);
 	cfg.fps_render_window.SetOptionVisible(false);
 	cfg.window_zoom.SetOptionVisible(false);
-	// Toggling this freezes the web player
-	cfg.vsync.SetOptionVisible(false);
 #elif defined(__WIIU__)
 	// FIXME: Some options below may crash, better disable for now
 	cfg.fullscreen.SetOptionVisible(false);

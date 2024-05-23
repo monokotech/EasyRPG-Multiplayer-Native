@@ -405,10 +405,12 @@ inline Game_Clock::duration BaseUi::GetFrameLimit() const {
 	return IsFrameRateSynchronized() ? Game_Clock::duration(0) : frame_limit;
 }
 
+#ifndef EMSCRIPTEN
 inline void BaseUi::SetFrameLimit(int fps_limit) {
 	vcfg.fps_limit.Set(fps_limit);
 
 	frame_limit = (fps_limit == 0 ? Game_Clock::duration(0) : Game_Clock::TimeStepFromFps(fps_limit));
 }
+#endif
 
 #endif

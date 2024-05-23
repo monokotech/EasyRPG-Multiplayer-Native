@@ -34,6 +34,10 @@
 #  include "platform/switch/ui.h"
 #endif
 
+#ifdef EMSCRIPTEN
+#  include <emscripten.h>
+#endif
+
 std::shared_ptr<BaseUi> DisplayUi;
 
 std::shared_ptr<BaseUi> BaseUi::CreateUi(long width, long height, const Game_Config& cfg) {
@@ -119,3 +123,10 @@ bool BaseUi::ChangeDisplaySurfaceResolution(int new_width, int new_height) {
 
 	return vChangeDisplaySurfaceResolution(new_width, new_height);
 }
+
+#ifdef EMSCRIPTEN
+void BaseUi::SetFrameLimit(int fps_limit) {
+	vcfg.fps_limit.Set(fps_limit);
+	emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT, fps_limit > 0 ? 1000 / fps_limit : 0);
+}
+#endif
