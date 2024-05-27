@@ -72,6 +72,7 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       transform: translate(-50%, -50%);
+      outline: none;
     }
 
     img#canvas {
@@ -170,12 +171,33 @@ window.addEventListener('load', (event) => {
       easyrpgPlayer.initApi();
 
       // Custom code here
+      const textInputHelper = TextInputHelper(Module);
+      Module.api_private.startTextInput_js = textInputHelper.startTextInput;
+      Module.api_private.stopTextInput_js = textInputHelper.stopTextInput;
+      Module.api_private.setTextInputRect_js = textInputHelper.setTextInputRect;
+      Module.api_private.getClipboardText_js = textInputHelper.getClipboardText;
+      Module.api_private.setClipboardText_js = textInputHelper.setClipboardText;
     });
 });
 
-// Make EasyRPG player embeddable
-canvas.addEventListener('mouseenter', () => window.focus());
-canvas.addEventListener('click', () => window.focus());
+/**
+ * Make EasyRPG player embeddable (focusable)
+ *
+ * @param: leave blank to use the previous element,
+ *   pass `null` to restore to default
+ */
+let playerFocusElement = null;
+function focusPlayer(element) {
+  if (element !== undefined)
+    playerFocusElement = element;
+  if (playerFocusElement) {
+    playerFocusElement.focus();
+    return;
+  }
+  canvas.focus();
+}
+canvas.addEventListener('mouseenter', () => focusPlayer());
+canvas.addEventListener('click', () => focusPlayer());
 
 // Handle clicking on the fullscreen button
 document.querySelector('#controls-fullscreen').addEventListener('click', () => {
@@ -203,11 +225,14 @@ function simulateKeyboardEvent(eventType, key) {
  *
  * @param {string} key Key to simulate
  */
-function simulateKeyboardInput(key) {
+async function simulateKeyboardInput(key) {
   simulateKeyboardEvent('keydown', key);
-  window.setTimeout(() => {
-    simulateKeyboardEvent('keyup', key);
-  }, 100);
+  return new Promise(resolve => {
+    setTimeout(() => {
+      simulateKeyboardEvent('keyup', key);
+      resolve();
+    }, 100);
+  });
 }
 
 /**
@@ -340,7 +365,7 @@ if (hasTouchscreen) {
   }
 } else {
   // Prevent scrolling when pressing specific keys
-  window.addEventListener('keydown', event => {
+  canvas.addEventListener('keydown', event => {
     if (preventNativeKeys.includes(event.key)) {
       event.preventDefault();
     }
@@ -357,6 +382,98 @@ if (hasTouchscreen) {
 }
 
 updateTouchControlsVisibility();
+
+/**
+ * IME & Clipboard support
+ *  IME: Use the events of the proxy=<input> element instead of SDL's IME
+ * References: Led's implementation
+ */
+function TextInputHelper(Module) {
+  const proxy = document.createElement('input');
+  for (const [prop, val] of [['position', 'absolute'],
+      ['opacity', 0], ['width', '0px'], ['height', '0px']]) {
+    proxy.style[prop] = val;
+  }
+  proxy.id = 'proxy';
+  canvas.insertAdjacentElement('beforebegin', proxy);
+
+  // Forward events. You can still interact with the Player
+  //  even when the focus is on the html input
+  let proxyBlocked = false;
+  let isPressingControl = false;
+  for (const eventType of ['keydown', 'keypress', 'keyup',
+      'mousedown', 'mouseenter', 'mouseleave', 'mousemove', 'wheel',
+      'touchcancel', 'touchend', 'touchmove', 'touchstart',
+      'webglcontextlost', 'contextmenu']) {
+    proxy.addEventListener(eventType, event => {
+      if (proxyBlocked && event.type !== 'keyup')
+        return;
+      if (event.type === 'keydown' && event.key === 'Control')
+        isPressingControl = true;
+      if (event.type === 'keyup' && event.key === 'Control')
+        isPressingControl = false;
+      // Prevent default copy-paste event
+      if (isPressingControl &&
+          (event.code === 'KeyC' || event.code === 'KeyV'))
+        return;
+      canvas.dispatchEvent(new event.constructor(event.type, event));
+    });
+  }
+
+  proxy.addEventListener("keydown", event => {
+    // Prevent tabbing out
+    if (event.key === 'Tab') {
+      event.preventDefault();
+    }
+  });
+
+  // Ignore temporary text of IME composition
+  let isComposing = false;
+  function handleInput() {
+    Module.api.updateTextInputBuffer(proxy.value);
+    proxy.value = "";
+  }
+  proxy.addEventListener('compositionstart', () => {
+    isComposing = true;
+    proxyBlocked = true;
+  });
+  proxy.addEventListener('compositionend', () => {
+    isComposing = false;
+    proxyBlocked = false;
+    handleInput();
+  });
+  proxy.addEventListener('input', () => {
+    if (!isComposing && proxy.value !== '') {
+      handleInput();
+    }
+  });
+
+  // Clipboard
+  let clipboardText = "";
+  proxy.addEventListener('copy', async (event) => {
+    event.preventDefault();
+    await simulateKeyboardInput('KeyC'); // setClipboardText
+    navigator.clipboard.writeText(clipboardText);
+  });
+  proxy.addEventListener('paste', event => {
+    event.preventDefault();
+    clipboardText = event.clipboardData.getData('text/plain');
+    simulateKeyboardInput('KeyV'); // getClipboardText
+  });
+
+  const methods = {
+    startTextInput: () => { focusPlayer(proxy); },
+    stopTextInput: () => { focusPlayer(null); },
+    setTextInputRect: (x, y) => {
+      proxy.style.left = `${x}px`;
+      proxy.style.top = `${y}px`;
+    },
+    getClipboardText: () => { return clipboardText; }, // paste
+    setClipboardText: text => { clipboardText = text; }, // copy
+  };
+
+  return methods;
+}
 </script>
 
 </body>

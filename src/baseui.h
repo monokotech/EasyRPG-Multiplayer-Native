@@ -194,6 +194,10 @@ public:
 
 	std::string FetchTextInputBuffer();
 
+#ifdef EMSCRIPTEN
+	void UpdateTextInputBuffer(std::string_view text);
+#endif
+
 	/** @return true if the display manages the framerate */
 	bool IsFrameRateSynchronized() const;
 
@@ -346,6 +350,12 @@ inline std::string BaseUi::FetchTextInputBuffer() {
 	text_input_buffer = ""; // reset buffer when fetching
 	return val;
 }
+
+#ifdef EMSCRIPTEN
+inline void BaseUi::UpdateTextInputBuffer(std::string_view text) {
+	text_input_buffer = text;
+}
+#endif
 
 inline BitmapRef const& BaseUi::GetDisplaySurface() const {
 	return main_surface;

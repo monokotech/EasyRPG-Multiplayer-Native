@@ -47,6 +47,11 @@
 #  include "platform/macos/macos_utils.h"
 #endif
 
+#ifdef EMSCRIPTEN
+#  include <emscripten.h>
+#  include "platform/emscripten/interface.h"
+#endif
+
 #ifdef SUPPORT_AUDIO
 #  include "sdl_audio.h"
 
@@ -138,6 +143,9 @@ Sdl2Ui::Sdl2Ui(long width, long height, const Game_Config& cfg) : BaseUi(cfg)
 #endif
 #ifdef EMSCRIPTEN
 	SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0");
+	// Prevent blocking the default behavior of events on the child element
+	//  sdl code: if (!keyElement) keyElement = EMSCRIPTEN_EVENT_TARGET_|>WINDOW<|
+	SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas");
 #endif
 #ifdef __WIIU__
 	//WHBProcInit();
@@ -666,27 +674,54 @@ void Sdl2Ui::UpdateDisplay() {
 }
 
 std::string Sdl2Ui::GetClipboardText() {
+#ifndef EMSCRIPTEN
 	char* c_str = SDL_GetClipboardText();
 	std::string str(c_str);
 	SDL_free(c_str);
 	return str;
+#else
+	return Emscripten_Interface::GetClipboardText();
+#endif
 }
 
 void Sdl2Ui::SetClipboardText(std::string text) {
+#ifndef EMSCRIPTEN
 	SDL_SetClipboardText(text.c_str());
+#else
+	Emscripten_Interface::SetClipboardText(text);
+#endif
 }
 
 void Sdl2Ui::SetTextInputRect(int x, int y, int w, int h) {
-	SDL_Rect rect = {x, y, w, h};
+	SDL_Rect rect = {0, 0, 0, 0};
+	rect.x = x * window.scale + viewport.x;
+	rect.y = y * window.scale + viewport.y;
+	rect.w = w * window.scale;
+	rect.h = h * window.scale;
+#ifndef EMSCRIPTEN
 	SDL_SetTextInputRect(&rect);
+#else
+	double ratio = emscripten_get_device_pixel_ratio();
+	Emscripten_Interface::SetTextInputRect(
+			rect.x / ratio, rect.y / ratio,
+			rect.w / ratio, rect.h / ratio);
+#endif
 }
 
 void Sdl2Ui::StartTextInput() {
+#ifndef EMSCRIPTEN
 	SDL_StartTextInput();
+#else
+	Emscripten_Interface::StartTextInput();
+#endif
 }
 
 void Sdl2Ui::StopTextInput() {
+#ifndef EMSCRIPTEN
 	SDL_StopTextInput();
+#else
+	Emscripten_Interface::StopTextInput();
+#endif
 }
 
 void Sdl2Ui::SetTitle(const std::string &title) {
@@ -861,7 +896,9 @@ void Sdl2Ui::ProcessKeyUpEvent(SDL_Event &evnt) {
 }
 
 void Sdl2Ui::ProcessTextInputEvent(SDL_Event &evnt) {
+#ifndef EMSCRIPTEN
 	text_input_buffer += evnt.text.text;
+#endif
 }
 
 void Sdl2Ui::ProcessMouseMotionEvent(SDL_Event& evnt) {
