@@ -27,6 +27,7 @@
 #include "player.h"
 #include "scene_save.h"
 #include "output.h"
+#include "baseui.h"
 
 void Emscripten_Interface::Reset() {
 	Player::reset_flag = true;
@@ -68,6 +69,48 @@ void Emscripten_Interface::TakeScreenshot() {
 	}, screenshot.data(), screenshot.size(), filename.c_str());
 }
 
+/**
+ * IME & Clipboard support
+ */
+
+void Emscripten_Interface::StartTextInput() {
+	EM_ASM({
+		Module.api_private.startTextInput_js();
+	});
+}
+
+void Emscripten_Interface::StopTextInput() {
+	EM_ASM({
+		Module.api_private.stopTextInput_js();
+	});
+}
+
+void Emscripten_Interface::SetTextInputRect(int x, int y, int w, int h) {
+	EM_ASM_ARGS({
+		Module.api_private.setTextInputRect_js($0, $1);
+	}, x, y);
+}
+
+void Emscripten_Interface::UpdateTextInputBuffer(std::string text) {
+	DisplayUi->UpdateTextInputBuffer(text);
+}
+
+std::string Emscripten_Interface::GetClipboardText() {
+	return reinterpret_cast<const char*>(EM_ASM_PTR({
+		return stringToNewUTF8(Module.api_private.getClipboardText_js());
+	}));
+}
+
+void Emscripten_Interface::SetClipboardText(std::string_view text) {
+	EM_ASM_ARGS({
+		Module.api_private.setClipboardText_js(UTF8ToString($0));
+	}, text.data());
+}
+
+/**
+ * Private Emscripten Interface
+ */
+
 bool Emscripten_Interface_Private::UploadSavegameStep2(int slot, int buffer_addr, int size) {
 	auto fs = FileFinder::Save();
 	std::string name = Scene_Save::GetSaveFilename(fs, slot);
@@ -99,6 +142,8 @@ EMSCRIPTEN_BINDINGS(player_interface) {
 		.class_function("uploadSavegame", &Emscripten_Interface::UploadSavegame)
 		.class_function("refreshScene", &Emscripten_Interface::RefreshScene)
 		.class_function("takeScreenshot", &Emscripten_Interface::TakeScreenshot)
+		// IME & Clipboard support
+		.class_function("updateTextInputBuffer", &Emscripten_Interface::UpdateTextInputBuffer)
 	;
 
 	emscripten::class_<Emscripten_Interface_Private>("api_private")
