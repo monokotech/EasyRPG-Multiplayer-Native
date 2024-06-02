@@ -28,6 +28,7 @@
 
 /**
  * DataHandler
+ * Send/OnMessage: Complete message
  */
 
 class DataHandler {
@@ -35,18 +36,21 @@ public:
 	constexpr static size_t BUFFER_SIZE = 4096;
 	constexpr static size_t HEAD_SIZE = sizeof(uint16_t);
 
-	std::function<void(std::string_view data)> OnData;
+	void Send(std::string_view data);
+	std::function<void(std::string_view data)> OnWrite;
 
-	std::string MakeBuffer(std::string_view data);
+	void GotDataBuffer(const char* buf, size_t buf_used);
+	std::function<void(std::string_view data)> OnMessage;
 
-	void GotBuffer(const char *buf, ssize_t buf_used);
+	void Close();
+	std::function<void()> OnClose;
 
 	std::function<void(std::string_view data)> OnWarning;
 
 private:
-	void InternalOnData(const char* buf, const ssize_t size) {
+	void OnMessageBuffer(const char* buf, const size_t size) {
 		std::string_view data(reinterpret_cast<const char*>(buf), size);
-		OnData(data);
+		OnMessage(data);
 	}
 
 	bool got_head = false;
@@ -58,6 +62,7 @@ private:
 
 /**
  * Socket
+ * Write/OnData: Raw data
  */
 
 class Socket {
@@ -65,15 +70,15 @@ public:
 	Socket();
 
 	enum class AsyncCall {
-		SEND,
-		OPEN,
-		CLOSE,
+		WRITE,
+		OPENSOCKET,
+		CLOSESOCKET,
 	};
 
+	std::function<void(std::string_view data)> OnData;
+	std::function<void(std::string_view data)> OnMessage;
 	std::function<void()> OnOpen;
 	std::function<void()> OnClose;
-	std::function<void(const char*, const size_t)> OnRawData;
-	std::function<void(std::string_view data)> OnData;
 
 	void InitStream(uv_loop_t* loop);
 
@@ -85,10 +90,11 @@ public:
 		read_timeout_ms = _read_timeout_ms;
 	}
 
-	void SendRaw(const char*, const size_t);
-	void Send(std::string_view data);
+	inline void Send(std::string_view data) { data_handler.Send(data); }
+	void Write(std::string_view data);
 	void Open();
-	void Close();
+	inline void Close() { data_handler.Close(); }
+	void CloseSocket();
 
 	std::function<void(std::string_view data)> OnInfo;
 	std::function<void(std::string_view data)> OnWarning;
@@ -98,7 +104,7 @@ private:
 	std::queue<AsyncCall> m_request_queue;
 
 	struct AsyncData {
-		Socket *socket;
+		Socket* socket;
 	} async_data;
 	uv_async_t async;
 
@@ -114,9 +120,9 @@ private:
 
 	bool is_initialized = false;
 
-	void InternalOpen();
-	void InternalClose();
-	void InternalSend();
+	void InternalOpenSocket();
+	void InternalCloseSocket();
+	void InternalWrite();
 
 	DataHandler data_handler;
 };

@@ -64,7 +64,7 @@ public:
 	void Open() override {
 		socket->OnInfo = [](std::string_view m) { OutputMt::Info("S: {}", m); };
 		socket->OnWarning = [](std::string_view m) { OutputMt::Warning("S: {}", m); };
-		socket->OnData = [this](auto p1) { HandleData(p1); };
+		socket->OnMessage = [this](auto p1) { HandleData(p1); };
 		socket->OnOpen = [this]() { HandleOpen(); };
 		socket->OnClose = [this]() { HandleClose(); };
 		socket->Open();

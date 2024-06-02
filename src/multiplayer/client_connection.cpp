@@ -97,7 +97,7 @@ void ClientConnection::Open() {
 	socket->SetReadTimeout(cfg->no_heartbeats.Get() ? 0 : 6000);
 	socket->SetRemoteAddress(addr_host, addr_port);
 	socket->ConfigSocks5(socks5_addr_host, socks5_addr_port);
-	socket->OnData = [this](auto p1) { HandleData(p1); };
+	socket->OnMessage = [this](auto p1) { HandleData(p1); };
 	socket->OnConnect = [this]() { HandleOpen(); };
 	socket->OnDisconnect = [this]() { HandleCloseOrTerm(); };
 	socket->OnFail = [this]() { HandleCloseOrTerm(true); };
