@@ -507,6 +507,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 		src/multiplayer/server.h
 		src/multiplayer/socket.cpp
 		src/multiplayer/socket.h
+		src/multiplayer/websocket.cpp
+		src/multiplayer/websocket.h
+		src/multiplayer/util/sha1.cpp
+		src/multiplayer/util/sha1.h
 	)
 endif()
 
@@ -515,9 +519,12 @@ add_library(${PROJECT_NAME}_server OBJECT
 	src/multiplayer/connection.cpp
 	src/multiplayer/socket.cpp
 	src/multiplayer/packet.cpp
+	src/multiplayer/websocket.cpp
 	src/multiplayer/output_mt.cpp
 	src/multiplayer/util/serialize.cpp
 	src/multiplayer/util/hexdump.cpp
+	src/multiplayer/util/base64.cpp
+	src/multiplayer/util/sha1.cpp
 )
 
 # Include directories
@@ -1262,6 +1269,7 @@ if(${PLAYER_BUILD_EXECUTABLE} AND ${PLAYER_TARGET_PLATFORM} MATCHES "^SDL(1|2)$"
 				src/platform/emscripten/interface.h)
 
 		target_link_libraries(${EXE_NAME} "idbfs.js")
+		target_link_libraries(${EXE_NAME} "websocket.js")
 
 		set_target_properties(${EXE_NAME} PROPERTIES OUTPUT_NAME "${PLAYER_JS_OUTPUT_NAME}")
 	endif()

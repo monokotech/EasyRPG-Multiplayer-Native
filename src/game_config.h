@@ -128,7 +128,7 @@ struct Game_ConfigMultiplayer {
 	StringConfigParam server_picture_prefixes{ "", "", "Multiplayer", "ServerPicturePrefixes", "" };
 	StringConfigParam server_virtual_3d_maps{ "", "", "Multiplayer", "ServerVirtual3DMaps", "" };
 	BoolConfigParam client_auto_connect{ "", "", "Multiplayer", "ClientAutoConnect", false };
-	StringConfigParam client_remote_address{ "", "", "Multiplayer", "ClientRemoteAddress", "localhost:6500" };
+	StringConfigParam client_remote_address{ "", "", "Multiplayer", "ClientRemoteAddress", "" };
 	StringConfigParam client_socks5_address{ "", "", "Multiplayer", "ClientSocks5Address", "" };
 	BoolConfigParam client_chat_immersive_mode{ "", "", "Multiplayer", "ClientChatImmersiveMode", false };
 	StringConfigParam client_chat_visibility{ "", "", "Multiplayer", "ClientChatVisibility", "" };

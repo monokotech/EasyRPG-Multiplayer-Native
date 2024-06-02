@@ -121,6 +121,9 @@ private:
 
 	std::unique_ptr<ClientConnection> connection;
 
+#ifdef EMSCRIPTEN
+	long heartbeat_setinterval_id = 0;
+#endif
 	bool reconnect_wait{ false };
 	bool active{ false }; // if true, it will automatically reconnect when disconnected
 	bool switching_room{ true }; // when client enters new room, but not synced to server

@@ -23,14 +23,168 @@
 
 #ifndef EMSCRIPTEN
 #  include "socket.h"
+#else
+#  include <emscripten/websocket.h>
+#endif
+
+#ifdef EMSCRIPTEN
+class ConnectorSocket {
+public:
+	void SetReadTimeout(uint16_t _read_timeout_ms) { read_timeout_ms = _read_timeout_ms; }
+
+	void ConfigSocks5(std::string_view host, const uint16_t port) {
+		if (!host.empty()) {
+			OnWarning(std::string("EM_WS: Enable SOCKS5 from the browser. addr: ")
+					.append(host) + ":" + std::to_string(port));
+		}
+	}
+
+	void SetRemoteAddress(std::string host, uint16_t port) {
+		std::string_view ws_protocol = "ws://";
+		std::string_view path = "";
+		if (host.empty()) {
+			port = 80;
+		}
+
+		// WebSocket protocol
+		auto location_protocol = reinterpret_cast<char*>(EM_ASM_PTR({
+			return stringToNewUTF8(window.location.protocol);
+		}));
+		if (strcmp(location_protocol, "https:") == 0) {
+			ws_protocol = "wss://";
+			if (host.empty()) {
+				port = 443;
+			}
+		}
+		free(location_protocol);
+
+		if (host.empty()) {
+			// Hostname
+			auto location_hostname = reinterpret_cast<char*>(EM_ASM_PTR({
+				return stringToNewUTF8(window.location.hostname);
+			}));
+			host = location_hostname;
+			free(location_hostname);
+
+			// Appended path (Use reverse proxy for ports 80 or 443)
+			path = "/connect";
+		}
+
+		// Final outcome: ws_protocol://host:port/path
+		url = std::string(ws_protocol).append(host) + ":" + std::to_string(port).append(path);
+	}
+
+	std::function<void(std::string_view data)> OnMessage;
+
+	void Send(std::string_view data) {
+		emscripten_websocket_send_binary(websocket, (void*)data.data(), data.size());
+	}
+
+	std::function<void()> OnConnect;
+	std::function<void()> OnDisconnect;
+	std::function<void()> OnFail;
+
+	void Connect() {
+		EmscriptenWebSocketCreateAttributes ws_attrs = {
+			url.c_str(),
+			"binary",
+			EM_TRUE,
+		};
+		websocket = emscripten_websocket_new(&ws_attrs);
+
+		/* Set websocket callbacks */
+		emscripten_websocket_set_onmessage_callback(websocket, this,
+				[](int, const EmscriptenWebSocketMessageEvent* event, void* userData) -> EM_BOOL {
+			auto socket = static_cast<ConnectorSocket*>(userData);
+			socket->SetReadTimeout();
+			socket->OnMessage(std::string_view(reinterpret_cast<const char*>(event->data), event->numBytes));
+			return EM_TRUE;
+		});
+		emscripten_websocket_set_onopen_callback(websocket, this,
+				[](int, const EmscriptenWebSocketOpenEvent* event, void* userData) -> EM_BOOL {
+			auto socket = static_cast<ConnectorSocket*>(userData);
+			socket->SetReadTimeout();
+			socket->OnConnect();
+			socket->OnInfo(std::string("EM_WS: Created a connection from: ").append(socket->url));
+			return EM_TRUE;
+		});
+		emscripten_websocket_set_onclose_callback(websocket, this,
+				[](int, const EmscriptenWebSocketCloseEvent* event, void* userData) -> EM_BOOL {
+			auto socket = static_cast<ConnectorSocket*>(userData);
+			socket->ClearReadTimeout();
+			if (event->code > 1000) {
+				std::string_view reason(event->reason);
+				if (reason.empty())
+					socket->OnWarning(std::string("EM_WS: Status code: ").append(std::to_string(event->code)));
+				else
+					socket->OnWarning(std::string("EM_WS: ")
+							.append("(code " + std::to_string(event->code) + ") ").append(reason));
+				switch (event->code) {
+				case 1006:
+					socket->OnDisconnect();
+					break;
+				default:
+					socket->OnFail();
+				};
+			} else {
+				socket->OnDisconnect();
+			}
+			socket->OnInfo(std::string("EM_WS: Connection closed from: ").append(socket->url));
+			return EM_TRUE;
+		});
+	}
+
+	void Disconnect() {
+		ClearReadTimeout();
+		// Calling `close` will not fire the `onclose` event
+		emscripten_websocket_close(websocket, 1000, nullptr);
+		emscripten_websocket_delete(websocket);
+		OnInfo("EM_WS: Disconnected");
+	}
+
+	std::function<void(std::string_view data)> OnInfo;
+	std::function<void(std::string_view data)> OnWarning;
+
+private:
+	std::string url;
+
+	EMSCRIPTEN_WEBSOCKET_T websocket;
+
+	/**
+	 * Read Timeout
+	 */
+
+	uint16_t read_timeout_ms = 0;
+	long read_timeout_id = 0;
+
+	void ClearReadTimeout() {
+		if (read_timeout_id) {
+			// The use of set_interval is because clear_timeout did not call
+			// runtimeKeepalivePop(), which causes onExit to not trigger
+			emscripten_clear_interval(read_timeout_id);
+			read_timeout_id = 0;
+		}
+	}
+
+	void SetReadTimeout() {
+		if (!read_timeout_ms) {
+			return;
+		}
+		ClearReadTimeout();
+		read_timeout_id = emscripten_set_interval([](void* userData) {
+			auto socket = static_cast<ConnectorSocket*>(userData);
+			socket->OnWarning(std::string("EM_WS: Read timeout: ").append(socket->url));
+			socket->Disconnect();
+			socket->OnDisconnect();
+		}, read_timeout_ms, this);
+	}
+};
 #endif
 
 static constexpr size_t QUEUE_MAX_BULK_SIZE = 4096;
 
 ClientConnection::ClientConnection() {
-#ifndef EMSCRIPTEN
 	socket.reset(new ConnectorSocket());
-#endif
 }
 // ->> unused code
 ClientConnection::ClientConnection(ClientConnection&& o)
@@ -91,7 +245,6 @@ void ClientConnection::HandleData(std::string_view data) {
 void ClientConnection::Open() {
 	if (connected || connecting)
 		return;
-#ifndef EMSCRIPTEN
 	socket->OnInfo = [](std::string_view m) { OutputMt::Info("{}", m); };
 	socket->OnWarning = [](std::string_view m) { OutputMt::Warning("{}", m); };
 	socket->SetReadTimeout(cfg->no_heartbeats.Get() ? 0 : 6000);
@@ -102,16 +255,13 @@ void ClientConnection::Open() {
 	socket->OnDisconnect = [this]() { HandleCloseOrTerm(); };
 	socket->OnFail = [this]() { HandleCloseOrTerm(true); };
 	socket->Connect();
-#endif
 	connecting = true;
 }
 
 void ClientConnection::Close() {
 	if (!connected && !connecting)
 		return;
-#ifndef EMSCRIPTEN
 	socket->Disconnect();
-#endif
 	m_queue = decltype(m_queue){};
 	connecting = false;
 	connected = false;
@@ -120,10 +270,8 @@ void ClientConnection::Close() {
 void ClientConnection::Send(std::string_view data) {
 	if (!connected)
 		return;
-#ifndef EMSCRIPTEN
 	socket->Send(data);
 	Print("Client Sent: ", data);
-#endif
 }
 
 void ClientConnection::Receive() {

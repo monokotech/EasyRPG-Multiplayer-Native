@@ -1121,7 +1121,7 @@ void InputsTyping() {
 		} else if (command == "!connect" || command == "!c") {
 			std::string address = fnd.next("");
 			if (address != "")
-				GMI().SetRemoteAddress(address);
+				GMI().SetRemoteAddress(address == "<empty>" ? "" : address);
 			GMI().Connect();
 		// command: !disconnect
 		} else if (command == "!disconnect" || command == "!d") {
