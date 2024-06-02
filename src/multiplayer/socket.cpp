@@ -88,11 +88,11 @@ int Resolve(const std::string& address, const uint16_t port,
  * + Resolve the issue of TCP packet sticking or unpacking
  */
 
-std::string DataHandler::MakeBuffer(std::string_view data) {
-	return SerializeString16(data);
+void DataHandler::Send(std::string_view data) {
+	OnWrite(SerializeString16(data));
 }
 
-void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
+void DataHandler::GotDataBuffer(const char* buf, size_t buf_used) {
 	while (begin < buf_used) {
 		uint16_t buf_remaining = buf_used-begin;
 		uint16_t tmp_buf_remaining = BUFFER_SIZE-tmp_buf_used;
@@ -103,7 +103,7 @@ void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
 				if (data_remaining <= tmp_buf_remaining) {
 					if (data_remaining <= buf_remaining) {
 						memcpy(tmp_buf+tmp_buf_used, buf+begin, data_remaining);
-						InternalOnData(tmp_buf, data_size);
+						OnMessageBuffer(tmp_buf, data_size);
 						begin += data_remaining;
 					} else {
 						if (buf_remaining > 0) {
@@ -113,7 +113,7 @@ void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
 						break; // Go to the next packet
 					}
 				} else {
-					OnWarning(std::string("DataHandler::GotBuffer exception (data): ")
+					OnWarning(std::string("DataHandler::GotDataBuffer exception (data): ")
 						.append("tmp_buf_used: ").append(std::to_string(tmp_buf_used))
 						.append(", data_size: ").append(std::to_string(data_size))
 						.append(", data_remaining: ").append(std::to_string(data_remaining)));
@@ -139,7 +139,7 @@ void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
 				got_head = true;
 			// Data can be taken out from buf_remaining
 			} else if (got_head && data_size <= buf_remaining) {
-				InternalOnData(buf+begin, data_size);
+				OnMessageBuffer(buf+begin, data_size);
 				begin += data_size;
 				got_head = false;
 				data_size = 0;
@@ -159,6 +159,10 @@ void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
 	begin = 0;
 }
 
+void DataHandler::Close() {
+	OnClose();
+}
+
 /**
  * Socket
  */
@@ -166,32 +170,34 @@ void DataHandler::GotBuffer(const char *buf, ssize_t buf_used) {
 Socket::Socket() {
 	send_req.data = this;
 	// Wrapper is needed, the callback has not been assigned yet
+	data_handler.OnWrite = [this](std::string_view data) { Write(data); };
+	data_handler.OnMessage = [this](std::string_view data) { OnMessage(data); };
+	data_handler.OnClose = [this]() { CloseSocket(); };
 	data_handler.OnWarning = [this](std::string_view data) { OnWarning(data); };
-	data_handler.OnData = [this](std::string_view data) { OnData(data); };
 }
 
 void Socket::InitStream(uv_loop_t* loop) {
 	stream.data = this;
 	async_data.socket = this;
 	async.data = &async_data;
-	uv_async_init(loop, &async, [](uv_async_t *handle) {
+	uv_async_init(loop, &async, [](uv_async_t* handle) {
 		auto async_data = static_cast<AsyncData*>(handle->data);
 		auto socket = async_data->socket;
 		std::lock_guard lock(socket->m_call_mutex);
 		while (!socket->m_request_queue.empty()) {
 			switch (socket->m_request_queue.front()) {
-			case AsyncCall::SEND:
+			case AsyncCall::WRITE:
 				if (!socket->is_sending &&
 						!socket->m_send_queue.empty()) {
 					socket->is_sending = true;
-					socket->InternalSend();
+					socket->InternalWrite();
 				}
 				break;
-			case AsyncCall::OPEN:
-				socket->InternalOpen();
+			case AsyncCall::OPENSOCKET:
+				socket->InternalOpenSocket();
 				break;
-			case AsyncCall::CLOSE:
-				socket->InternalClose();
+			case AsyncCall::CLOSESOCKET:
+				socket->InternalCloseSocket();
 				break;
 			}
 			socket->m_request_queue.pop();
@@ -203,31 +209,19 @@ void Socket::InitStream(uv_loop_t* loop) {
 	is_initialized = true;
 }
 
-void Socket::SendRaw(const char* raw_buf, const size_t raw_size) {
+void Socket::Write(std::string_view data) {
 	std::lock_guard lock(m_call_mutex);
 
 	if (!is_initialized || m_send_queue.size() > 100)
 		return;
 
-	m_send_queue.emplace(raw_buf, raw_size);
+	m_send_queue.emplace(data);
 
-	m_request_queue.push(AsyncCall::SEND);
+	m_request_queue.push(AsyncCall::WRITE);
 	uv_async_send(&async);
 }
 
-void Socket::Send(std::string_view data) {
-	std::lock_guard lock(m_call_mutex);
-
-	if (!is_initialized || m_send_queue.size() > 100)
-		return;
-
-	m_send_queue.push(data_handler.MakeBuffer(data));
-
-	m_request_queue.push(AsyncCall::SEND);
-	uv_async_send(&async);
-}
-
-void Socket::InternalSend() {
+void Socket::InternalWrite() {
 	std::string_view data = m_send_queue.front();
 	uv_buf_t buf = uv_buf_init(const_cast<char*>(data.data()), data.size());
 	uv_write(&send_req, reinterpret_cast<uv_stream_t*>(&stream), &buf, 1,
@@ -241,7 +235,7 @@ void Socket::InternalSend() {
 			if (socket->m_send_queue.empty()) {
 				socket->is_sending = false;
 			} else {
-				socket->InternalSend();
+				socket->InternalWrite();
 			}
 		}
 	});
@@ -249,11 +243,11 @@ void Socket::InternalSend() {
 
 void Socket::Open() {
 	std::lock_guard lock(m_call_mutex);
-	m_request_queue.push(AsyncCall::OPEN);
+	m_request_queue.push(AsyncCall::OPENSOCKET);
 	uv_async_send(&async);
 }
 
-void Socket::InternalOpen() {
+void Socket::InternalOpenSocket() {
 	uv_read_start(reinterpret_cast<uv_stream_t*>(&stream),
 			[](uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
 		buf->base = new char[DataHandler::BUFFER_SIZE];
@@ -267,12 +261,12 @@ void Socket::InternalOpen() {
 			if (nread != UV_EOF) {
 				socket->OnWarning(std::string("Read failed: ").append(uv_strerror(nread)));
 			}
-			socket->InternalClose();
+			socket->InternalCloseSocket();
 		} else if (nread > 0) {
-			if (socket->OnRawData) {
-				socket->OnRawData(buf->base, nread);
+			if (socket->OnData) {
+				socket->OnData(std::string_view(buf->base, nread));
 			} else {
-				data_handler.GotBuffer(buf->base, nread);
+				data_handler.GotDataBuffer(buf->base, nread);
 			}
 		}
 		if (buf->base) {
@@ -282,25 +276,25 @@ void Socket::InternalOpen() {
 			uv_timer_again(&socket->read_timeout_req);
 	});
 	if (read_timeout_ms > 0) {
-		uv_timer_start(&read_timeout_req, [](uv_timer_t *handle) {
+		uv_timer_start(&read_timeout_req, [](uv_timer_t* handle) {
 			auto socket = static_cast<Socket*>(handle->data);
 			socket->OnWarning(std::string("Read timeout: ").append(GetPeerAddress(&socket->stream)));
-			socket->InternalClose();
+			socket->InternalCloseSocket();
 		}, read_timeout_ms, read_timeout_ms);
 	}
 	OnInfo(std::string("Created a connection from: ").append(GetPeerAddress(&stream)));
 	OnOpen();
 }
 
-void Socket::Close() {
+void Socket::CloseSocket() {
 	std::lock_guard lock(m_call_mutex);
 	if (!is_initialized)
 		return;
-	m_request_queue.push(AsyncCall::CLOSE);
+	m_request_queue.push(AsyncCall::CLOSESOCKET);
 	uv_async_send(&async);
 }
 
-void Socket::InternalClose() {
+void Socket::InternalCloseSocket() {
 	if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)))
 		return;
 	OnInfo(std::string("Closing connection: ").append(GetPeerAddress(&stream)));
@@ -370,7 +364,7 @@ void ConnectorSocket::Connect() {
 		async_data.stop_flag = false;
 		async.data = &async_data;
 
-		uv_async_init(&loop, &async, [](uv_async_t *handle) {
+		uv_async_init(&loop, &async, [](uv_async_t* handle) {
 			auto async_data = static_cast<AsyncData*>(handle->data);
 			if (async_data->stop_flag)
 				uv_stop(handle->loop);
@@ -404,34 +398,34 @@ void ConnectorSocket::Connect() {
 		}
 		InitStream(&loop);
 		uv_tcp_connect(&connect_req, GetStream(), reinterpret_cast<struct sockaddr*>(&addr),
-				[](uv_connect_t *connect_req, int status) {
+				[](uv_connect_t* connect_req, int status) {
 			auto socket = static_cast<ConnectorSocket*>(connect_req->data);
 			if (status < 0) {
 				socket->is_failed = true;
 				socket->OnWarning(std::string("Connection failed: ").append(uv_strerror(status)));
-				socket->Close();
+				socket->CloseSocket();
 				return;
 			}
 			socket->Open();
 			if (!socket->socks5_req_addr_host.empty()) {
-				socket->OnRawData = [socket](const char* data, const size_t size) {
+				socket->OnData = [socket](std::string_view data) {
 					switch (socket->socks5_step) {
 					case SOCKS5_STEP::SS_GREETING:
-						if (!SOCKS5::CheckGreeting(std::vector<char>(data, data+size))) {
+						if (!SOCKS5::CheckGreeting(std::vector<char>(data.begin(), data.end()))) {
 							auto vec = SOCKS5::GetConnectionRequest(
 									socket->socks5_req_addr_host, socket->socks5_req_addr_port);
-							socket->SendRaw(vec.data(), vec.size());
+							socket->Write(std::string_view(vec.data(), vec.size()));
 							socket->socks5_step = SOCKS5_STEP::SS_CONNECTIONREQUEST;
 							return;
 						}
 						break;
 					case SOCKS5_STEP::SS_CONNECTIONREQUEST:
-						if (!SOCKS5::CheckConnectionRequest(std::vector<char>(data, data+size))) {
+						if (!SOCKS5::CheckConnectionRequest(std::vector<char>(data.begin(), data.end()))) {
 							socket->OnInfo(std::string("SOCKS5 request successful: ")
 								.append(socket->socks5_req_addr_host)
 								.append(":")
 								.append(std::to_string(socket->socks5_req_addr_port)));
-							socket->OnRawData = nullptr;
+							socket->OnData = nullptr;
 							socket->OnConnect();
 							return;
 						}
@@ -440,10 +434,10 @@ void ConnectorSocket::Connect() {
 					socket->is_failed = true;
 					socket->OnWarning(std::string("SOCKS5 request failed at step: ").append(
 							std::to_string(static_cast<uint8_t>(socket->socks5_step))));
-					socket->Close();
+					socket->CloseSocket();
 				};
 				auto vec = SOCKS5::GetGreeting();
-				socket->SendRaw(vec.data(), vec.size());
+				socket->Write(std::string_view(vec.data(), vec.size()));
 				socket->socks5_step = SOCKS5_STEP::SS_GREETING;
 			}
 		});
@@ -456,7 +450,7 @@ void ConnectorSocket::Connect() {
 
 void ConnectorSocket::Disconnect() {
 	manually_close_flag = true;
-	Close();
+	CloseSocket();
 }
 
 /**
@@ -481,7 +475,7 @@ void ServerListener::Start(bool wait_thread) {
 		async_data.stop_flag = false;
 		async.data = &async_data;
 
-		uv_async_init(&loop, &async, [](uv_async_t *handle) {
+		uv_async_init(&loop, &async, [](uv_async_t* handle) {
 			auto async_data = static_cast<AsyncData*>(handle->data);
 			if (async_data->stop_flag)
 				uv_stop(handle->loop);
@@ -520,7 +514,7 @@ void ServerListener::Start(bool wait_thread) {
 
 		OnInfo("Listening on: " + addr_host + " " + std::to_string(addr_port));
 
-		err = uv_listen(reinterpret_cast<uv_stream_t*>(&listener), 4096, [](uv_stream_t *listener, int status) {
+		err = uv_listen(reinterpret_cast<uv_stream_t*>(&listener), 4096, [](uv_stream_t* listener, int status) {
 			auto server_listener = static_cast<ServerListener*>(listener->data);
 			if (status < 0) {
 				return;
@@ -531,7 +525,7 @@ void ServerListener::Start(bool wait_thread) {
 			if (uv_accept(listener, reinterpret_cast<uv_stream_t*>(socket->GetStream())) == 0) {
 				server_listener->OnConnection(std::move(socket));
 			} else {
-				socket->Close();
+				socket->CloseSocket();
 			}
 		});
 		if (err) {
