@@ -23,9 +23,7 @@
 #include "connection.h"
 #include "../game_config.h"
 
-#ifndef EMSCRIPTEN
 class ConnectorSocket;
-#endif
 
 using namespace Multiplayer;
 
@@ -67,9 +65,7 @@ private:
 	std::string socks5_addr_host;
 	uint16_t socks5_addr_port{ 1080 };
 
-#ifndef EMSCRIPTEN
 	std::unique_ptr<ConnectorSocket> socket;
-#endif
 
 	bool connecting = false;
 	bool connected = false;

@@ -21,6 +21,7 @@
 #include "util/serialize.h"
 #include "socket.h"
 #include "connection.h"
+#include "websocket.h"
 #include "socks5.h"
 
 /**
@@ -85,14 +86,37 @@ int Resolve(const std::string& address, const uint16_t port,
 
 /**
  * DataHandler
- * + Resolve the issue of TCP packet sticking or unpacking
+ * + Default (Resolve the issue of TCP packet sticking or unpacking)
+ * + WebSocket
  */
 
+DataHandler::DataHandler() {
+	websocket.OnWrite = [this](std::string_view data) { OnWrite(data); };
+	websocket.OnMessage = [this](std::string_view data) { OnMessage(data); };
+	websocket.OnClose = [this]() { OnClose(); };
+	websocket.OnWarning = [this](std::string_view data) { OnWarning(data); };
+}
+
 void DataHandler::Send(std::string_view data) {
-	OnWrite(SerializeString16(data));
+	if (is_websocket)
+		websocket.Send(data);
+	else
+		OnWrite(SerializeString16(data));
 }
 
 void DataHandler::GotDataBuffer(const char* buf, size_t buf_used) {
+	if (!is_protocol_confirmed) {
+		if (std::string_view(buf, buf_used > 3 ? 3 : buf_used) == "GET") {
+			is_websocket = true;
+		}
+		is_protocol_confirmed = true;
+	}
+
+	if (is_websocket) {
+		websocket.GotData(std::string_view(buf, buf_used));
+		return;
+	}
+
 	while (begin < buf_used) {
 		uint16_t buf_remaining = buf_used-begin;
 		uint16_t tmp_buf_remaining = BUFFER_SIZE-tmp_buf_used;
@@ -161,7 +185,10 @@ void DataHandler::GotDataBuffer(const char* buf, size_t buf_used) {
 
 
 void DataHandler::Close() {
-	OnClose();
+	if (is_websocket)
+		websocket.Close();
+	else
+		OnClose();
 }
 
 

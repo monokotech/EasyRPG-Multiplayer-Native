@@ -60,6 +60,8 @@
 
 #ifndef EMSCRIPTEN
 #  include "server.h"
+#else
+#  include <emscripten/eventloop.h>
 #endif
 
 using namespace Messages;
@@ -170,6 +172,15 @@ void Game_Multiplayer::InitConnection() {
 					Connect();
 				}
 			}).detach();
+#else
+			emscripten_set_timeout([](void *userData) {
+				auto game_multiplayer = static_cast<Game_Multiplayer*>(userData);
+				game_multiplayer->reconnect_wait = false;
+				if (game_multiplayer->active) {
+					Output::Info("MP: reconnecting: ID={}", game_multiplayer->room_id);
+					game_multiplayer->Connect();
+				}
+			}, 3000, this);
 #endif
 		}
 	});
@@ -179,36 +190,36 @@ void Game_Multiplayer::InitConnection() {
 		Disconnect();
 	});
 
-	auto SetGlobalPlayersSystem = [this](int id, std::string& sys_name, bool replace) {
-		auto it = global_players_system.find(id);
-		if (!replace && it != global_players_system.end()) {
-			if (it->second == sys_name)
-				return;
-		}
-		global_players_system[id] = sys_name;
-		if (players.find(id) == players.end()) return;
-		auto& player = players[id];
-		auto name_tag = player.name_tag.get();
-		if (name_tag) {
-			name_tag->SetSystemGraphic(sys_name);
-		}
-	};
-	auto UpdateGlobalPlayersSystem = [this, SetGlobalPlayersSystem](int id, std::string& sys_name, bool replace) {
-		// local Player always return ture
-		if (Cache::System(sys_name)) {
-			SetGlobalPlayersSystem(id, sys_name, replace);
-		} else {
-			FileRequestAsync* request = AsyncHandler::RequestFile("System", sys_name);
-			sys_graphic_request_id = request->Bind([this, SetGlobalPlayersSystem,
-						id, &sys_name, replace](FileRequestResult* result) {
-				if (!result->success) {
+	auto SetGlobalPlayersSystem = [this](int id, const std::string& sys_name, bool force_update = false) {
+		auto Update = [this, id, sys_name, force_update]() {
+			auto it = global_players_system.find(id);
+			// forced update is because system_pkt arrived earlier than name_pkt
+			if (!force_update && it != global_players_system.end()) {
+				if (it->second == sys_name)
 					return;
-				}
-				SetGlobalPlayersSystem(id, sys_name, replace);
-			});
-			request->SetGraphicFile(true);
-			request->Start();
-		}
+			}
+			global_players_system[id] = sys_name;
+			if (players.find(id) == players.end()) return;
+			auto& player = players[id];
+			auto name_tag = player.name_tag.get();
+			if (name_tag) {
+				name_tag->SetSystemGraphic(sys_name);
+			}
+		};
+#ifndef EMSCRIPTEN
+		Update();
+#else
+		// AsyncHandler remembers downloaded files, see IsReady() and ClearRequests()
+		FileRequestAsync* request = AsyncHandler::RequestFile("System", sys_name);
+		sys_graphic_request_id = request->Bind([this, Update](FileRequestResult* result) {
+			if (!result->success) {
+				return;
+			}
+			Update();
+		});
+		request->SetGraphicFile(true);
+		request->Start();
+#endif
 	};
 
 	connection->RegisterHandler<ConfigPacket>([this](ConfigPacket& p) {
@@ -293,12 +304,12 @@ void Game_Multiplayer::InitConnection() {
 			Main_Data::game_pictures->EraseAllMultiplayerForPlayer(p.id);
 		}
 	});
-	connection->RegisterHandler<ChatPacket>([this, UpdateGlobalPlayersSystem](ChatPacket& p) {
+	connection->RegisterHandler<ChatPacket>([this, SetGlobalPlayersSystem](ChatPacket& p) {
 		if (p.type == 0)
 			CUI().GotInfo(p.message);
 		else if (p.type == 1) {
 			if (p.sys_name != "")
-				UpdateGlobalPlayersSystem(p.id, p.sys_name, false);
+				SetGlobalPlayersSystem(p.id, p.sys_name);
 			CUI().GotMessage(p.visibility, p.room_id, p.name, p.message, p.sys_name);
 		}
 	});
@@ -358,8 +369,8 @@ void Game_Multiplayer::InitConnection() {
 		auto& player = players[p.id];
 		player.ch->SetSpriteHidden(p.is_hidden);
 	});
-	connection->RegisterHandler<SystemPacket>([this, UpdateGlobalPlayersSystem](SystemPacket& p) {
-		UpdateGlobalPlayersSystem(p.id, p.name, true);
+	connection->RegisterHandler<SystemPacket>([this, SetGlobalPlayersSystem](SystemPacket& p) {
+		SetGlobalPlayersSystem(p.id, p.name, true);
 	});
 	connection->RegisterHandler<SoundEffectPacket>([this](SoundEffectPacket& p) {
 		if (players.find(p.id) == players.end()) return;
@@ -474,10 +485,11 @@ void Game_Multiplayer::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 		Server().Start();
 #endif
 	connection->SetConfig(&cfg);
-#ifndef EMSCRIPTEN
+
 	// Heartbeat
 	if (!cfg.no_heartbeats.Get()) {
 		connection->RegisterHandler<HeartbeatPacket>([this](HeartbeatPacket& p) {});
+#ifndef EMSCRIPTEN
 		std::thread([this]() {
 			while (true) {
 				std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -486,8 +498,15 @@ void Game_Multiplayer::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 				}
 			}
 		}).detach();
-	}
+#else
+		emscripten_set_interval([](void *userData) {
+			auto game_multiplayer = static_cast<Game_Multiplayer*>(userData);
+			if (game_multiplayer->active && game_multiplayer->connection->IsConnected()) {
+				game_multiplayer->connection->SendPacket(HeartbeatPacket());
+			}
+		}, 3000, this);
 #endif
+	}
 }
 
 Game_ConfigMultiplayer& Game_Multiplayer::GetConfig() {
@@ -515,7 +534,13 @@ bool Game_Multiplayer::IsActive() {
 void Game_Multiplayer::Connect() {
 	if (connection->IsConnected()) return;
 	active = true;
-	connection->SetAddress(cfg.client_remote_address.Get());
+	std::string remote_address = cfg.client_remote_address.Get();
+#ifndef EMSCRIPTEN
+	if (remote_address.empty()) {
+		remote_address = "127.0.0.1:6500";
+	}
+#endif
+	connection->SetAddress(remote_address);
 	if (!cfg.client_socks5_address.Get().empty())
 		connection->SetSocks5Address(cfg.client_socks5_address.Get());
 	CUI().SetStatusConnection(false, true);
@@ -532,6 +557,13 @@ void Game_Multiplayer::Disconnect() {
 }
 
 void Game_Multiplayer::SwitchRoom(int map_id, bool room_switch) {
+#ifdef EMSCRIPTEN
+	/* Automatic connection in a production environment may be necessary,
+	 * and if the address is empty, it will auto retrieve the address */
+	if (!cfg.client_auto_connect.Get() && cfg.client_remote_address.Get().empty()) {
+		cfg.client_auto_connect.Set(true);
+	}
+#endif
 	SetNametagMode(cfg.client_name_tag_mode.Get());
 	CUI().SetStatusRoom(map_id);
 	Output::Debug("MP: room_id=map_id={}", map_id);

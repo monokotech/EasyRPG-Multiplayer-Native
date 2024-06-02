@@ -24,6 +24,7 @@
 #include <memory>
 #include <queue>
 #include <mutex>
+#include "websocket.h"
 #include "uv.h"
 
 /**
@@ -35,6 +36,8 @@ class DataHandler {
 public:
 	constexpr static size_t BUFFER_SIZE = 4096;
 	constexpr static size_t HEAD_SIZE = sizeof(uint16_t);
+
+	DataHandler();
 
 	void Send(std::string_view data);
 	std::function<void(std::string_view data)> OnWrite;
@@ -58,6 +61,10 @@ private:
 	uint16_t begin = 0;
 	char tmp_buf[BUFFER_SIZE];
 	uint16_t tmp_buf_used = 0;
+
+	bool is_protocol_confirmed = false;
+	bool is_websocket = false;
+	WebSocket websocket;
 };
 
 /**
