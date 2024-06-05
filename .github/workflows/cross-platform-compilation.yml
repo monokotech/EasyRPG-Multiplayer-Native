@@ -1,6 +1,6 @@
 # Settings (See .../settings/secrets/actions)
 # +- secrets: APK_KEY_ALIAS, APK_KEY_PASSWORD, APK_STORE_FILE_B64
-# +- variables: TOOLCHAIN_RELEASE_NAME
+# +- variables: TOOLCHAIN_RELEASE_NAME, MACOS_TOOLCHAIN_OLDPATH
 
 name: Cross-platform Compilation
 
@@ -65,7 +65,7 @@ jobs:
 
       - name: Compile
         run: |
-          VER="(GA, `date +%Y-%m-%d`)"
+          VER="(GithubActions, `date +%Y-%m-%d`)"
           cmake -G Ninja -B build . \
             -DBUILD_CLIENT=off -DBUILD_SERVER=on \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=usr \
@@ -126,6 +126,7 @@ jobs:
       - name: Setup Env
         run: |
           echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | sed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
+          echo "PLAYER_VERSION_APPEND=\"(GithubActions, $(date +%Y-%m-%d))\"" >> "$GITHUB_ENV"
 
       - name: Setup Toolchain
         run: |
@@ -143,7 +144,7 @@ jobs:
             -DPLAYER_BUILD_LIBLCF=on ^
             -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" ^
             -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" ^
-            -DPLAYER_MULTIPLAYER=on
+            -DPLAYER_MULTIPLAYER=on -DPLAYER_VERSION_APPEND=${{ env.PLAYER_VERSION_APPEND }}
           :: https://stackoverflow.com/questions/19024259/how-to-change-the-build-type-to-release-mode-in-cmake/20423820#20423820
           cmake --build build --config RelWithDebInfo
 
@@ -215,9 +216,11 @@ jobs:
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
           ORG_GRADLE_PROJECT_ABI_FILTERS_RELEASE: ${{ matrix.abi }}
         run: |
+          VER="(GithubActions/`date +%Y-%m-%d`)"
           cmake_opts="-DPLAYER_MULTIPLAYER=on -DCMAKE_BUILD_TYPE=Release -DPLAYER_BUILD_LIBLCF=on"" "
           cmake_opts+="-DPLAYER_BUILD_LIBLCF_GIT='https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf'"" "
-          cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"
+          cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"" "
+          cmake_opts+="-DPLAYER_VERSION_APPEND='$VER'"
           cd builds/android
           ./gradlew -PtoolchainDirs="${{ github.workspace }}/toolchain" \
             -PcmakeOptions="$cmake_opts" \
@@ -269,7 +272,7 @@ jobs:
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
           # fix: Imported target ... includes non-existent path
           # grep: -I is to exclude binary files
-          oldpath="/Users/runner/work/EasyRPG-buildscripts/EasyRPG-buildscripts/macos/x86_64"; \
+          oldpath="${{ vars.MACOS_TOOLCHAIN_OLDPATH }}"; \
             grep toolchain -I -l -r -e "$oldpath" | \
             xargs -I{} sed -i '' "s|$oldpath|${{ github.workspace }}/toolchain/universal|g" "{}"
 
@@ -295,6 +298,77 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip "build/EasyRPG Player.app"
+
+      - name: Create Github Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "${{ env.FILENAME }}.zip"
+          replacesArtifacts: false
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  webplayer:
+    runs-on: ubuntu-latest
+
+    env:
+      FILENAME: "EPMP-${{ github.ref_name }}-WebPlayer"
+
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v4
+        if: github.event.inputs.git-ref == ''
+      - name: Clone Repository (with custom ref)
+        uses: actions/checkout@v4
+        if: github.event.inputs.git-ref != ''
+        with:
+          ref: ${{ github.event.inputs.git-ref }}
+
+      - name: Setup Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git emsdk-portable
+          cd emsdk-portable
+          touch .emscripten
+          ./emsdk install 3.1.49
+          ./emsdk activate 3.1.49
+
+      - name: Setup Env
+        run: |
+          echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | sed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
+
+      - name: Setup Toolchain
+        run: |
+          mkdir emscripten_toolchain && cd emscripten_toolchain
+          aria2c -o tmp.tar.gz \
+            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/emscripten_toolchain.tar.gz"
+          tar xf tmp.tar.gz
+          mkdir bin
+
+      - name: Compile
+        run: |
+          VER="(GithubActions, `date +%Y-%m-%d`)"
+          cmake . -B build \
+          -DCMAKE_TOOLCHAIN_FILE=./emsdk-portable/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
+          -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH \
+          -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
+          -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
+          -DCMAKE_PREFIX_PATH=${{ github.workspace }}/emscripten_toolchain \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DPLAYER_JS_BUILD_SHELL=ON \
+          -DPLAYER_JS_OUTPUT_NAME=index \
+          -DPLAYER_JS_GAME_URL=/play/games/ \
+          -DPLAYER_MULTIPLAYER=on \
+          -DPLAYER_BUILD_LIBLCF=on \
+          -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
+          -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
+          -DPLAYER_VERSION_APPEND="$VER" \
+          -DPLAYER_WITH_FLUIDSYNTH=OFF
+          cmake --build build
+
+      - name: Create Archive
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          7z a -mx9 ${{ env.FILENAME }}.zip "build/index."*
 
       - name: Create Github Release
         if: startsWith(github.ref, 'refs/tags/')
