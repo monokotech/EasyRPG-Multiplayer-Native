@@ -103,8 +103,8 @@ Input::ButtonMappingArray Input::GetDefaultButtonMappings() {
 		{FAST_FORWARD_B, Keys::G},
 
 		{TOGGLE_MUTE, Keys::M},
-		{TOGGLE_NOTIFICATIONS, Keys::F9},
-		{TOGGLE_CHAT, Keys::F10},
+		{TOGGLE_NOTIFICATIONS, Keys::F3},
+		{TOGGLE_CHAT, Keys::TAB},
 
 		{KEY_UP, Keys::UP},
 		{KEY_DOWN, Keys::DOWN},
@@ -112,7 +112,6 @@ Input::ButtonMappingArray Input::GetDefaultButtonMappings() {
 		{KEY_RIGHT, Keys::RIGHT},
 		{KEY_BACKSPACE, Keys::BACKSPACE},
 		{KEY_RETURN, Keys::RETURN},
-		{KEY_TAB, Keys::TAB},
 		{KEY_C, Keys::C},
 		{KEY_V, Keys::V},
 		{KEY_CTRL, Keys::LCTRL},

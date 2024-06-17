@@ -1394,10 +1394,13 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     SDLInputConnection.nativeCommitText(String.valueOf((char) event.getUnicodeChar()), 1);
                 }
             }
+            lastKeyCode = keyCode;
             onNativeKeyDown(keyCode);
             return true;
         } else if (event.getAction() == KeyEvent.ACTION_UP) {
-            onNativeKeyUp(keyCode);
+            // the ACTION_UP Event of DummyEdit doesn't work correctly,
+            // so keyUpDelayHandler must be used instaed
+            keyUpDelayHandler.postDelayed(handleKeyUp, 100);
             return true;
         }
 

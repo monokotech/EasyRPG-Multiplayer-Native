@@ -951,8 +951,8 @@ void InitHello() {
 	AddLogEntry("", "!!   paste from type box.", "", Messages::CV_LOCAL);
 	AddLogEntry("", "!! • SHIFT+[←, →] to select text.", "", Messages::CV_LOCAL);
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
-	AddLogEntry("[F9]: ", "hide/show notifications.", "", Messages::CV_LOCAL);
-	AddLogEntry("[F10]: ", "focus/unfocus.", "", Messages::CV_LOCAL);
+	AddLogEntry("[F3]: ", "hide/show notifications.", "", Messages::CV_LOCAL);
+	AddLogEntry("[TAB]: ", "focus/unfocus.", "", Messages::CV_LOCAL);
 	AddLogEntry("[↑, ↓]: ", "scroll.", "", Messages::CV_LOCAL);
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
 	AddLogEntry("• Type !help to list commands.", "", "", Messages::CV_LOCAL);
