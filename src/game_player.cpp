@@ -66,13 +66,13 @@ lcf::rpg::SavePartyLocation Game_Player::GetSaveData() const {
 	return *data();
 }
 
-Drawable::Z_t Game_Player::GetScreenZ(bool apply_shift) const {
+Drawable::Z_t Game_Player::GetScreenZ(int x_offset, int y_offset) const {
 	// Player is always "same layer as hero".
 	// When the Player is on the same Y-coordinate as an event the Player is always rendered first.
 	// This is different to events where, when Y is the same, the highest X-coordinate is rendered first.
 	// To ensure this, fake a very high X-coordinate of 65535 (all bits set)
 	// See base function for full explanation of the bitmask
-	return Game_Character::GetScreenZ(apply_shift) | (0xFFFFu << 16u);
+	return Game_Character::GetScreenZ(x_offset, y_offset) | (0xFFFFu << 16u);
 }
 
 void Game_Player::ReserveTeleport(int map_id, int x, int y, int direction, TeleportTarget::Type tt) {
@@ -297,7 +297,7 @@ void Game_Player::UpdateNextMovementAction() {
 
 		ResetAnimation();
 		Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Decision));
-		Scene::instance->SetRequestedScene(std::make_shared<Scene_Menu>());
+		Game_Map::GetInterpreter().RequestMainMenuScene();
 		return;
 	}
 
@@ -846,3 +846,6 @@ void Game_Player::UpdatePan() {
 	data()->pan_current_y -= dy;
 }
 
+bool Game_Player::TriggerEventAt(int x, int y) {
+	return CheckEventTriggerThere({ lcf::rpg::EventPage::Trigger_action }, x, y, true);
+}

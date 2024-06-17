@@ -398,6 +398,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/window_input_settings.h \
 	src/window_item.cpp \
 	src/window_item.h \
+	src/window_interpreter.cpp \
+	src/window_interpreter.h \
 	src/window_keyboard.cpp \
 	src/window_keyboard.h \
 	src/window_menustatus.cpp \
@@ -432,6 +434,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/window_skill.h \
 	src/window_skillstatus.cpp \
 	src/window_skillstatus.h \
+	src/window_stringview.cpp \
+	src/window_stringview.h \
 	src/window_targetstatus.cpp \
 	src/window_targetstatus.h \
 	src/window_teleport.cpp \
@@ -513,7 +517,6 @@ EXTRA_DIST += \
 	bench/text.cpp \
 	bench/utils.cpp \
 	bench/variables.cpp \
-	src/external/picojson.h \
 	src/platform/3ds/audio.cpp \
 	src/platform/3ds/audio.h \
 	src/platform/3ds/clock.cpp \
@@ -579,6 +582,7 @@ libeasyrpg_player_a_CXXFLAGS = \
 	$(FREETYPE_CFLAGS) \
 	$(HARFBUZZ_CFLAGS) \
 	$(LHASA_CFLAGS) \
+	$(NLOHMANN_JSON_CFLAGS) \
 	$(SDL_CFLAGS) \
 	$(PNG_CFLAGS) \
 	$(ZLIB_CFLAGS) \
@@ -632,6 +636,7 @@ easyrpg_player_LDADD = libeasyrpg-player.a libplayer-version.a \
 	$(FREETYPE_LIBS) \
 	$(HARFBUZZ_LIBS) \
 	$(LHASA_LIBS) \
+	$(NLOHMANN_JSON_LIBS) \
 	$(SDL_LIBS) \
 	$(PNG_LIBS) \
 	$(ZLIB_LIBS) \

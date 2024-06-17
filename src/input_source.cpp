@@ -341,4 +341,13 @@ void Input::LogSource::UpdateSystem() {
 	// input log does not record actions outside of logical frames.
 }
 
+void Input::TouchInput::Down(int id, int x, int y) {
+	this->id = id;
+	this->position = { x, y };
+	this->pressed = true;
+}
 
+void Input::TouchInput::Up() {
+	id = -1;
+	pressed = false;
+}

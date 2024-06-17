@@ -101,7 +101,7 @@ lcf::rpg::SaveMapEvent Game_Event::GetSaveData() const {
 	lcf::rpg::SaveEventExecState state;
 	if (page && page->trigger == lcf::rpg::EventPage::Trigger_parallel) {
 		if (interpreter) {
-			state = interpreter->GetState();
+			state = interpreter->GetSaveState();
 		}
 
 		if (state.stack.empty() && page->event_commands.empty()) {
@@ -116,10 +116,10 @@ lcf::rpg::SaveMapEvent Game_Event::GetSaveData() const {
 	return save;
 }
 
-Drawable::Z_t Game_Event::GetScreenZ(bool apply_shift) const {
+Drawable::Z_t Game_Event::GetScreenZ(int x_offset, int y_offset) const {
 	// Lowest 16 bit are reserved for the ID
 	// See base function for full explanation
-	return Game_Character::GetScreenZ(apply_shift) + GetId();
+	return Game_Character::GetScreenZ(x_offset, y_offset) + GetId();
 }
 
 int Game_Event::GetOriginalMoveRouteIndex() const {

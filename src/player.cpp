@@ -111,9 +111,9 @@ namespace Player {
 	int menu_offset_y = (screen_height - MENU_HEIGHT) / 2;
 	int message_box_offset_x = (screen_width - MENU_WIDTH) / 2;
 	bool has_custom_resolution = false;
-
-	bool exit_flag;
-	bool reset_flag;
+	int exit_code = EXIT_SUCCESS;
+	bool exit_flag = false;
+	bool reset_flag = false;
 	bool debug_flag;
 	bool hide_title_flag;
 	bool server_flag;
@@ -662,11 +662,11 @@ Game_Config Player::ParseCommandLine() {
 			}
 			continue;
 		}
-		if (cp.ParseNext(arg, 0, "--no-audio") || cp.ParseNext(arg, 0, "--disable-audio")) {
+		if (cp.ParseNext(arg, 0, {"--no-audio", "--disable-audio"})) {
 			no_audio_flag = true;
 			continue;
 		}
-		if (cp.ParseNext(arg, 0, "--no-rtp") || cp.ParseNext(arg, 0, "--disable-rtp")) {
+		if (cp.ParseNext(arg, 0, {"--no-rtp", "--disable-rtp"})) {
 			no_rtp_flag = true;
 			continue;
 		}
@@ -879,8 +879,7 @@ void Player::CreateGameObjects() {
 		}
 	}
 
-	Output::Debug("Patch configuration: dynrpg={} maniac={} key-patch={} common-this={} pic-unlock={} 2k3-commands={}",
-		Player::IsPatchDynRpg(), Player::IsPatchManiac(), Player::IsPatchKeyPatch(), game_config.patch_common_this_event.Get(), game_config.patch_unlock_pics.Get(), game_config.patch_rpg2k3_commands.Get());
+	game_config.PrintActivePatches();
 
 	ResetGameObjects();
 
@@ -933,7 +932,7 @@ void Player::ResetGameObjects() {
 
 	auto min_var = lcf::Data::system.easyrpg_variable_min_value;
 	if (min_var == 0) {
-		if (Player::IsPatchManiac()) {
+		if ((Player::game_config.patch_maniac.Get() & 1) == 1) {
 			min_var = std::numeric_limits<Game_Variables::Var_t>::min();
 		} else {
 			min_var = Player::IsRPG2k3() ? Game_Variables::min_2k3 : Game_Variables::min_2k;
@@ -941,7 +940,7 @@ void Player::ResetGameObjects() {
 	}
 	auto max_var = lcf::Data::system.easyrpg_variable_max_value;
 	if (max_var == 0) {
-		if (Player::IsPatchManiac()) {
+		if ((Player::game_config.patch_maniac.Get() & 1) == 1) {
 			max_var = std::numeric_limits<Game_Variables::Var_t>::max();
 		} else {
 			max_var = Player::IsRPG2k3() ? Game_Variables::max_2k3 : Game_Variables::max_2k;
@@ -1458,17 +1457,27 @@ Engine options:
  --new-game           Skip the title scene and start a new game directly.
  --no-log-color       Disable colors in terminal log.
  --no-rtp             Disable support for the Runtime Package (RTP).
- --patch PATCH...     Instead of autodetecting patches used by this game, force
-                      emulation of certain patches.
-                      Options:
-                       common-this - "This Event" in common events
-                       dynrpg      - DynRPG patch by Cherry
-                       key-patch   - Key Patch by Ineluki
-                       maniac      - Maniac Patch by BingShan
-                       pic-unlock  - Pictures are not blocked by messages
-                       rpg2k3-cmds - Support all RPG Maker 2003 event commands
-                                     in any version of the engine
- --no-patch           Disable all engine patches.
+ --patch-antilag-switch SWITCH
+                      Disables event page refreshing when the switch SWITCH is
+                      enabled.
+ --patch-common-this  Enable usage of "This Event" in common events in any
+                      version of the engine.
+ --patch-direct-menu VAR
+                      Directly access subscreens of the default menu by setting
+                      VAR.
+ --patch-dynrpg       Enable support of DynRPG patch by Cherry (very limited).
+ --patch-easyrpg      Enable EasyRPG extensions.
+ --patch-key-patch    Enable Key Patch by Ineluki.
+ --patch-maniac [N]   Enable Maniac Patch by BingShan. Values for N:
+                       - 1: Enable the patch (default)
+                       - 2: Enable the patch but do not adjust variable ranges
+                            to 32 bit.
+ --patch-pic-unlock   Picture movement is not interrupted by messages in any
+                      version of the engine.
+ --patch-rpg2k3-cmds  Support all RPG Maker 2003 event commands in any version
+                      of the engine.
+ --no-patch           Disable all engine patches. To disable a single patch,
+                      prefix any of the patch options with --no-
  --project-path PATH  Instead of using the working directory, the game in PATH
                       is used.
  --record-input FILE  Record all button inputs to FILE.
@@ -1480,6 +1489,8 @@ Engine options:
                       store them in PATH. When using the game browser all games
                       will share the same save directory!
  --seed N             Seeds the random number generator with N.
+
+Providing any patch option disables the patch autodetection of the engine.
 
 Video options:
  --fps-limit          In combination with --no-vsync sets a custom frames per
@@ -1614,4 +1625,3 @@ std::string Player::GetEngineVersion() {
 	if (EngineVersion() > 0) return std::to_string(EngineVersion());
 	return std::string();
 }
-
