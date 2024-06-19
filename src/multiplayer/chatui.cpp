@@ -70,10 +70,10 @@ public:
 	}
 
 	void Draw(Bitmap& dst) {
-		dst.Blit(bounds.x+padding_horz, bounds.y+padding_vert,
+		dst.Blit(bounds.x + padding_horz, bounds.y + padding_vert,
 			*conn_status, conn_status->GetRect(), Opacity::Opaque());
 		auto r_rect = room_status->GetRect();
-		dst.Blit(bounds.x+bounds.width-padding_horz-r_rect.width, bounds.y+padding_vert,
+		dst.Blit(bounds.x + bounds.width - padding_horz - r_rect.width, bounds.y + padding_vert,
 			*room_status, r_rect, Opacity::Opaque());
 	};
 
@@ -87,15 +87,15 @@ public:
 			conn_label = status ? "Connected" : "Disconnected";
 
 		auto c_rect = Text::GetSize(*Font::Default(), conn_label);
-		conn_status = Bitmap::Create(c_rect.width+1, c_rect.height+1, true);
+		conn_status = Bitmap::Create(c_rect.width + 1, c_rect.height + 1, true);
 		Text::Draw(*conn_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 2, conn_label);
 	}
 
 	void SetRoomStatus(unsigned int room_id) {
 		std::string room_label = "";
-		room_label = "Room #"+std::to_string(room_id);
+		room_label = "Room #" + std::to_string(room_id);
 		auto r_rect = Text::GetSize(*Font::Default(), room_label);
-		room_status = Bitmap::Create(r_rect.width+1, r_rect.height+1, true);
+		room_status = Bitmap::Create(r_rect.width + 1, r_rect.height + 1, true);
 		Text::Draw(*room_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 1, room_label);
 	}
 };
@@ -201,7 +201,7 @@ class DrawableChatLog : public Drawable {
 		};
 		auto FindLastGlyphOf = [](GlyphLine& line, char32_t ch) -> int {
 			unsigned int n_glyphs = line.size();
-			for (int i = n_glyphs-1; i >= 0; i--) {
+			for (int i = n_glyphs - 1; i >= 0; i--) {
 				if (line[i].data.ch == ch) {
 					return i;
 				}
@@ -229,7 +229,7 @@ class DrawableChatLog : public Drawable {
 		};
 
 		// manual text wrapping
-		const unsigned int max_width = bounds.width-scroll_frame-message_margin;
+		const unsigned int max_width = bounds.width - scroll_frame - message_margin;
 
 		// individual lines saved so far, along with their y offset
 		std::vector<std::pair<GlyphLine, unsigned int>> lines;
@@ -264,10 +264,10 @@ class DrawableChatLog : public Drawable {
 				// as long as current line exceeds maximum width,
 				// move one word from this line down to the next one
 				int last_space = FindLastGlyphOf(glyphs_current, ' ');
-				if (break_word && last_space != -1 && last_space < glyphs_current.size()-1) {
+				if (break_word && last_space != -1 && last_space < glyphs_current.size() - 1) {
 					// there is a word that can be moved down
 					MoveGlyphsToNext(glyphs_current, glyphs_next,
-						width_current, width_next, glyphs_current.size()-last_space-1);
+						width_current, width_next, glyphs_current.size() - last_space - 1);
 				} else {
 					// there is not a whole word that can be moved down, so move individual characters.
 					// this case happens when last character in current line is a space,
@@ -279,7 +279,7 @@ class DrawableChatLog : public Drawable {
 			int line_break = FindFirstGlyphOf(glyphs_current, '\n');
 			if (line_break != -1) {
 				MoveGlyphsToNext(glyphs_current, glyphs_next,
-					width_current, width_next, glyphs_current.size()-line_break-1);
+					width_current, width_next, glyphs_current.size() - line_break - 1);
 			}
 			// save line
 			lines.push_back(std::make_pair(glyphs_current, total_height));
@@ -305,7 +305,7 @@ class DrawableChatLog : public Drawable {
 
 		// once all lines have been saved
 		// render them into a bitmap
-		BitmapRef text_img = Bitmap::Create(total_width+message_padding*2, total_height+message_padding*2, true);
+		BitmapRef text_img = Bitmap::Create(total_width + message_padding * 2, total_height + message_padding * 2, true);
 		// add background
 		if (overlay_flag)
 			text_img->Fill(Color(0, 0, 0, 102));
@@ -318,10 +318,10 @@ class DrawableChatLog : public Drawable {
 				auto ret = glyph.data;
 				if (EP_UNLIKELY(!ret)) continue;
 				if (glyph.color > -1) {
-					glyph_offset += Text::Draw(*text_img, glyph_offset+message_padding, line.second+message_padding,
+					glyph_offset += Text::Draw(*text_img, glyph_offset + message_padding, line.second + message_padding,
 						*Font::Default(), *graphic, glyph.color, ret.ch, ret.is_exfont).x;
 				} else {
-					glyph_offset += Text::Draw(*text_img, glyph_offset+message_padding, line.second+message_padding,
+					glyph_offset += Text::Draw(*text_img, glyph_offset + message_padding, line.second + message_padding,
 						*Font::Default(), *default_theme, 0, ret.ch, ret.is_exfont).x;
 				}
 			}
@@ -332,7 +332,7 @@ class DrawableChatLog : public Drawable {
 
 	void AssertScrollBounds() {
 		// maximum value for scroll_position (= amount of height escaping from the top)
-		const unsigned int max_scroll = std::max<int>(0, scroll_content_height-bounds.height);
+		const unsigned int max_scroll = std::max<int>(0, scroll_content_height - bounds.height);
 		scroll_position = std::max<int>(scroll_position, 0);
 		scroll_position = std::min<int>(scroll_position, max_scroll);
 	}
@@ -340,20 +340,20 @@ class DrawableChatLog : public Drawable {
 	void UpdateScrollBar() {
 		if (scroll_content_height <= bounds.height) {
 			// hide scrollbar if content isn't large enough for scroll
-			scroll_box.SetX(bounds.x+bounds.width);
+			scroll_box.SetX(bounds.x + bounds.width);
 			return;
 		}
-		scroll_box.SetX(bounds.x+bounds.width-scroll_frame); // show scrollbar
+		scroll_box.SetX(bounds.x + bounds.width - scroll_frame); // show scrollbar
 		// position scrollbar
-		const float ratio = bounds.height/float(scroll_content_height);
-		const unsigned int bar_height = bounds.height*ratio;
+		const float ratio = bounds.height / float(scroll_content_height);
+		const unsigned int bar_height = bounds.height * ratio;
 		// clamp the scroll_box minimum height
 		const unsigned int bar_height_safe = std::max<unsigned int>(bar_height, 16);
-		const unsigned int bar_y = scroll_position*ratio;
-		const unsigned int bar_offset_safe = (bar_height_safe-bar_height)*
-			(1.0f-float(bar_y)/bounds.height);
+		const unsigned int bar_y = scroll_position * ratio;
+		const unsigned int bar_offset_safe = (bar_height_safe - bar_height)
+			* (1.0f - float(bar_y) / bounds.height);
 		scroll_box.SetHeight(bar_height_safe);
-		scroll_box.SetY(bounds.y+bounds.height-bar_y-bar_height-bar_offset_safe);
+		scroll_box.SetY(bounds.y + bounds.height - bar_y - bar_height - bar_offset_safe);
 	}
 
 	// called when:
@@ -373,11 +373,12 @@ class DrawableChatLog : public Drawable {
 		for (int i = 0; i < messages.size(); i++)
 			messages[i].dirty = true;
 	}
+
 public:
 	DrawableChatLog(int x, int y, int w, int h)
 		: Drawable(Priority::Priority_Maximum, Drawable::Flags::Global),
 		bounds(x, y, w, h),
-		scroll_box(0, 0, scroll_frame+scroll_bleed, 0, Drawable::Flags::Global)
+		scroll_box(0, 0, scroll_frame + scroll_bleed, 0, Drawable::Flags::Global)
 	{
 		DrawableMgr::Register(this);
 
@@ -410,7 +411,7 @@ public:
 		// y offset to draw next message, from bottom of log panel
 		int next_height = -scroll_position;
 		unsigned int n_messages = messages.size();
-		for (int i = n_messages-1; i >= 0; i--) {
+		for (int i = n_messages - 1; i >= 0; i--) {
 			DrawableChatEntry& dmsg = messages[i];
 			// skip drawing hidden messages
 			if (!MessageVisible(dmsg, visibility_flags))
@@ -422,9 +423,9 @@ public:
 			if (next_height <= 0)
 				continue;
 			// cutoff message graphic so text does not bleed out of bounds
-			const unsigned int top_offscreen = std::max<int>(next_height-bounds.height, 0);
-			Rect cutoff_rect = Rect(rect.x, rect.y+top_offscreen,
-				rect.width, std::min<unsigned int>(rect.height, next_height)-top_offscreen);
+			const unsigned int top_offscreen = std::max<int>(next_height - bounds.height, 0);
+			Rect cutoff_rect = Rect(rect.x, rect.y + top_offscreen,
+				rect.width, std::min<unsigned int>(rect.height, next_height) - top_offscreen);
 			// rebuild message graphic if needed
 			if (messages[i].dirty)
 				BuildMessageGraphic(dmsg);
@@ -432,7 +433,7 @@ public:
 			unsigned int margin = message_margin;
 			if (overlay_flag)
 				margin = 0;
-			dst.Blit(bounds.x+margin, bounds.y+bounds.height-next_height+top_offscreen,
+			dst.Blit(bounds.x + margin, bounds.y + bounds.height - next_height + top_offscreen,
 				*(dmsg.render_graphic), cutoff_rect, Opacity::Opaque());
 			// stop drawing offscreen messages (top offscreen)
 			if (next_height > bounds.height)
@@ -443,7 +444,7 @@ public:
 		if (overlay_flag && overlay_auto_remove_flag && messages.size() > 0) {
 			++counter;
 			// the delay is 10 seconds
-			if (Game_Clock::GetFPS() > 0.0f && counter > Game_Clock::GetFPS()*10.0f) {
+			if (Game_Clock::GetFPS() > 0.0f && counter > Game_Clock::GetFPS() * 10.0f) {
 				counter = 0.0f;
 				RemoveFirstChatEntry();
 			}
@@ -484,7 +485,7 @@ public:
 					scroll_content_height -= d_msg.render_graphic->GetRect().height;
 					RefreshScroll();
 				}
-				messages.erase(messages.begin()+i);
+				messages.erase(messages.begin() + i);
 				break;
 			}
 		}
@@ -506,7 +507,7 @@ public:
 	}
 
 	void Scroll(int delta) {
-		SetScroll(scroll_position+delta);
+		SetScroll(scroll_position + delta);
 	}
 
 	void ShowScrollBar(bool v) {
@@ -534,7 +535,7 @@ public:
 		// if true, anchor has been found, so stop accumulating message heights
 		bool anchored = false;
 
-		for (int i = messages.size()-1; i >= 0; i--) {
+		for (int i = messages.size() - 1; i >= 0; i--) {
 			// is message visible with previous visibility mask?
 			bool pre_vis = MessageVisible(messages[i], visibility_flags);
 			// is message visible with new visibility mask?
@@ -559,7 +560,7 @@ public:
 		// updates scroll content height
 		scroll_content_height = new_content_height;
 		// adjusts scroll position so anchor stays in place
-		int scroll_delta = post_anchor_y-pre_anchor_y;
+		int scroll_delta = post_anchor_y - pre_anchor_y;
 		scroll_position += scroll_delta;
 		RefreshScroll();
 		// set new visibility mask
@@ -590,6 +591,7 @@ class DrawableTypeBox : public Drawable {
 	unsigned int get_label_margin() {
 		return (label->GetRect().width>1) ? label_margin : 0;
 	}
+
 public:
 	DrawableTypeBox(int x, int y, int w, int h)
 		: Drawable(Priority::Priority_Maximum, Drawable::Flags::Global),
@@ -601,7 +603,7 @@ public:
 		std::string caret_char = "｜";
 		const unsigned int caret_left_kerning = 6;
 		auto c_rect = Text::GetSize(*Font::Default(), caret_char);
-		caret = Bitmap::Create(c_rect.width+1-caret_left_kerning, c_rect.height+1, true);
+		caret = Bitmap::Create(c_rect.width + 1 - caret_left_kerning, c_rect.height + 1, true);
 		Text::Draw(*caret, -caret_left_kerning, 0, *Font::Default(), *Cache::SystemOrBlack(), 0, caret_char);
 
 		// initialize
@@ -611,30 +613,30 @@ public:
 
 	void Draw(Bitmap& dst) {
 		const unsigned int label_pad = get_label_margin();
-		const unsigned int type_visible_width = bounds.width-type_padding_horz*2-label_pad;
+		const unsigned int type_visible_width = bounds.width - type_padding_horz * 2 - label_pad;
 		auto rect = type_text->GetRect();
 		// crop type text to stay within padding
-		Rect cutoff_rect = Rect(scroll-type_bleed, rect.y,
-			std::min<int>(type_visible_width, rect.width-scroll)+type_bleed*2, rect.height);
+		Rect cutoff_rect = Rect(scroll - type_bleed, rect.y,
+			std::min<int>(type_visible_width, rect.width - scroll) + type_bleed * 2, rect.height);
 
 		// draw label
-		dst.Blit(bounds.x+label_padding_horz, bounds.y+label_padding_vert,
+		dst.Blit(bounds.x + label_padding_horz, bounds.y + label_padding_vert,
 			*label, label->GetRect(), Opacity::Opaque());
 		// draw contents
-		dst.Blit(bounds.x+label_pad+type_padding_horz-type_bleed, bounds.y+type_padding_vert,
+		dst.Blit(bounds.x + label_pad + type_padding_horz - type_bleed, bounds.y + type_padding_vert,
 			*type_text, cutoff_rect, Opacity::Opaque());
 		// draw caret
-		dst.Blit(bounds.x+label_pad+type_padding_horz+type_char_offsets[caret_index_head]-scroll,
-			bounds.y+type_padding_vert, *caret, caret->GetRect(), Opacity::Opaque());
+		dst.Blit(bounds.x + label_pad + type_padding_horz + type_char_offsets[caret_index_head] - scroll,
+			bounds.y + type_padding_vert, *caret, caret->GetRect(), Opacity::Opaque());
 		// draw selection
 		const unsigned int caret_start = std::min<unsigned int>(caret_index_tail, caret_index_head);
 		const unsigned int caret_end = std::max<unsigned int>(caret_index_tail, caret_index_head);
-		const unsigned int select_start = bounds.x+label_pad+type_padding_horz
-			+std::max<int>(type_char_offsets[caret_start]-scroll, -type_bleed);
-		const unsigned int select_end = bounds.x+label_pad+type_padding_horz
-			+std::min<int>(type_char_offsets[caret_end]-scroll, type_visible_width+type_bleed);
-		Rect selected_rect = Rect(select_start, bounds.y+type_padding_vert,
-			select_end-select_start, bounds.height-type_padding_vert*2);
+		const unsigned int select_start = bounds.x + label_pad + type_padding_horz
+			 + std::max<int>(type_char_offsets[caret_start] - scroll, -type_bleed);
+		const unsigned int select_end = bounds.x + label_pad + type_padding_horz
+			 + std::min<int>(type_char_offsets[caret_end] - scroll, type_visible_width + type_bleed);
+		Rect selected_rect = Rect(select_start, bounds.y + type_padding_vert,
+			select_end - select_start, bounds.height - type_padding_vert * 2);
 		dst.FillRect(selected_rect, Color(255, 255, 255, 100));
 	};
 
@@ -655,12 +657,12 @@ public:
 
 		// final value assigned to accumulated_rect is whole type string
 		// create Bitmap graphic for text
-		type_text = Bitmap::Create(accumulated_rect.width+1, accumulated_rect.height+1, true);
+		type_text = Bitmap::Create(accumulated_rect.width + 1, accumulated_rect.height + 1, true);
 		Text::Draw(*type_text, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 0, Utils::EncodeUTF(text));
 	}
 
 	const int GetCaretRelativeOffset() {
-		return type_char_offsets[caret_index_head]-scroll;
+		return type_char_offsets[caret_index_head] - scroll;
 	}
 
 	void SeekCaret(unsigned int seek_tail, unsigned int seek_head) {
@@ -668,48 +670,48 @@ public:
 		caret_index_head = seek_head;
 		// adjust type box horizontal scrolling based on caret position (always keep it in-bounds)
 		const unsigned int label_pad = get_label_margin();
-		const unsigned int type_visible_width = bounds.width-type_padding_horz*2-label_pad;
+		const unsigned int type_visible_width = bounds.width - type_padding_horz * 2 - label_pad;
 		// absolute offset of caret in relation to type text contents
 		const unsigned int caret_offset = type_char_offsets[caret_index_head];
 		// caret's position relative to viewable portion of type box
-		const int relative_offset = caret_offset-scroll;
+		const int relative_offset = caret_offset - scroll;
 		if (relative_offset < 0) {
 			// caret escapes from left side. adjust
 			scroll += relative_offset;
 		} else if (relative_offset >= type_visible_width) {
 			// caret escapes from right side. adjust
-			scroll += relative_offset-type_visible_width;
+			scroll += relative_offset - type_visible_width;
 		}
 	}
 
 	void MoveScrollToRight() {
 		const unsigned int caret_offset = type_char_offsets[caret_index_head];
-		const int relative_offset = caret_offset-scroll;
-		scroll = scroll-(caret_offset-relative_offset);
+		const int relative_offset = caret_offset - scroll;
+		scroll = scroll - (caret_offset - relative_offset);
 	}
 
 	void SetLabel(std::string l) {
 		auto l_rect = Text::GetSize(*Font::Default(), l);
-		label = Bitmap::Create(l_rect.width+1, l_rect.height+1, true);
+		label = Bitmap::Create(l_rect.width + 1, l_rect.height + 1, true);
 		Text::Draw(*label, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 1, l);
 	}
 
 	Rect GetFormBounds() {
 		const unsigned int label_pad = get_label_margin();
-		return Rect(bounds.x+label_pad+type_padding_horz, bounds.y,
-			bounds.width-label_pad-type_padding_horz, bounds.height);
+		return Rect(bounds.x + label_pad + type_padding_horz, bounds.y,
+			bounds.width - label_pad - type_padding_horz, bounds.height);
 	}
 };
 
 class DrawableChatUi : public Drawable {
 	// design parameters
-	const unsigned int chat_width = Player::screen_width*0.725;
-	const unsigned int chat_left = Player::screen_width-chat_width;
-	const unsigned int notification_log_height = Player::screen_height*0.275;
+	const unsigned int chat_width = Player::screen_width * 0.725;
+	const unsigned int chat_left = Player::screen_width - chat_width;
+	const unsigned int notification_log_height = Player::screen_height * 0.275;
 	const unsigned int panel_frame_left_top = 4; // width of panel's visual frame (border width is missing)
 	const unsigned int panel_frame_right_bottom = 6; // on right and bottom side (including border width)
 	const unsigned int status_height = 19; // height of status region on top of chatlog
-	const unsigned int log_scroll_delta = (Player::screen_height-status_height)/16;
+	const unsigned int log_scroll_delta = (Player::screen_height - status_height) / 16;
 	const unsigned int type_height = 19; // height of type box
 	const unsigned int type_border_offset = 8; // width of type border offset
 
@@ -728,8 +730,8 @@ class DrawableChatUi : public Drawable {
 			const unsigned int f = -8;
 			const auto form_rect = d_type.GetFormBounds();
 			back_panel.SetCursorRect(
-				Rect((f-type_border_offset)+form_rect.x-chat_left, f+form_rect.y,
-					form_rect.width+type_border_offset, form_rect.height));
+				Rect((f - type_border_offset) + form_rect.x - chat_left, f + form_rect.y,
+					form_rect.width + type_border_offset, form_rect.height));
 		} else {
 			back_panel.SetCursorRect(Rect(0, 0, 0, 0));
 		}
@@ -737,18 +739,18 @@ class DrawableChatUi : public Drawable {
 public:
 	DrawableChatUi()
 		: Drawable(Priority::Priority_Maximum, Drawable::Flags::Global),
-		d_notification_log(0, Player::screen_height-notification_log_height,
+		d_notification_log(0, Player::screen_height - notification_log_height,
 			Player::screen_width, notification_log_height),
 		back_panel(chat_left, 0, chat_width, Player::screen_height, Drawable::Flags::Global),
-		d_status(chat_left+panel_frame_left_top, 0, chat_width-panel_frame_right_bottom, status_height),
-		d_log(chat_left+panel_frame_left_top, status_height,
-			chat_width-panel_frame_right_bottom, Player::screen_height-status_height),
-		d_type(chat_left+panel_frame_left_top, Player::screen_height-type_height-panel_frame_left_top,
-			chat_width-panel_frame_right_bottom-type_border_offset, type_height)
+		d_status(chat_left + panel_frame_left_top, 0, chat_width - panel_frame_right_bottom, status_height),
+		d_log(chat_left + panel_frame_left_top, status_height,
+			chat_width - panel_frame_right_bottom, Player::screen_height - status_height),
+		d_type(chat_left + panel_frame_left_top, Player::screen_height - type_height - panel_frame_left_top,
+			chat_width - panel_frame_right_bottom - type_border_offset, type_height)
 	{
 		DrawableMgr::Register(this);
 
-		back_panel.SetZ(Priority::Priority_Maximum-1);
+		back_panel.SetZ(Priority::Priority_Maximum - 1);
 		back_panel.SetOpacity(240);
 
 		d_notification_log.SetOverlayMode(true, true, true);
@@ -764,7 +766,7 @@ public:
 	}
 
 	void AddNotificationLogEntry(ChatEntry* msg, unsigned int limit) {
-		if (d_notification_log.GetSize() > limit-1)
+		if (d_notification_log.GetSize() > limit - 1)
 			d_notification_log.RemoveFirstChatEntry();
 		d_notification_log.AddChatEntry(msg);
 	}
@@ -806,8 +808,8 @@ public:
 	void UpdateTypeTextInputRect() {
 		const auto form_rect = d_type.GetFormBounds();
 		DisplayUi->SetTextInputRect(
-			form_rect.x+d_type.GetCaretRelativeOffset(),
-			form_rect.y+form_rect.height-6
+			form_rect.x + d_type.GetCaretRelativeOffset(),
+			form_rect.y + form_rect.height - 6
 		);
 	}
 
@@ -817,7 +819,7 @@ public:
 	}
 
 	void ScrollUp() {
-		d_log.Scroll(+log_scroll_delta);
+		d_log.Scroll( + log_scroll_delta);
 	}
 
 	void ScrollDown() {
@@ -836,11 +838,11 @@ public:
 		UpdateTypePanel();
 		d_log.ShowScrollBar(focused);
 		if (focused) {
-			d_log.SetHeight(Player::screen_height-status_height-type_height-panel_frame_right_bottom);
+			d_log.SetHeight(Player::screen_height - status_height - type_height - panel_frame_right_bottom);
 			DisplayUi->StartTextInput();
 			UpdateTypeTextInputRect();
 		} else {
-			d_log.SetHeight(Player::screen_height-status_height-panel_frame_right_bottom);
+			d_log.SetHeight(Player::screen_height - status_height - panel_frame_right_bottom);
 			d_log.SetScroll(0);
 			DisplayUi->StopTextInput();
 		}
@@ -1042,22 +1044,22 @@ void InputsTyping() {
 		unsigned int caret_start = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		unsigned int caret_end = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		// erase selection
-		type_text.erase(caret_start, caret_end-caret_start);
+		type_text.erase(caret_start, caret_end - caret_start);
 		std::u32string input_u32 = Utils::DecodeUTF32(input_text);
-		std::u32string fits = input_u32.substr(0, MAXCHARSINPUT_MESSAGE-type_text.size());
+		std::u32string fits = input_u32.substr(0, MAXCHARSINPUT_MESSAGE - type_text.size());
 		type_text.insert(caret_start, fits);
-		type_caret_index_tail = type_caret_index_head = caret_start+fits.size();
+		type_caret_index_tail = type_caret_index_head = caret_start + fits.size();
 	}
 
 	// erase
 	if (Input::IsExternalRepeated(Input::InputButton::KEY_BACKSPACE)) {
 		unsigned int caret_start = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 		unsigned int caret_end = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
-		auto len = std::max<unsigned int>(1, caret_end-caret_start);
+		auto len = std::max<unsigned int>(1, caret_end - caret_start);
 		if (caret_start == caret_end) {
 			if (caret_start == 0)
 				return;
-			type_caret_index_tail = type_caret_index_head = std::max<int>(0, caret_start-1);
+			type_caret_index_tail = type_caret_index_head = std::max<int>(0, caret_start - 1);
 		} else
 			type_caret_index_tail = type_caret_index_head = caret_start;
 		type_text.erase(type_caret_index_tail, len);
@@ -1069,7 +1071,7 @@ void InputsTyping() {
 		if (type_caret_index_tail != type_caret_index_head) {
 			unsigned int caret_start = std::min<unsigned int>(type_caret_index_tail, type_caret_index_head);
 			unsigned int caret_end = std::max<unsigned int>(type_caret_index_tail, type_caret_index_head);
-			std::u32string selected = type_text.substr(caret_start, caret_end-caret_start);
+			std::u32string selected = type_text.substr(caret_start, caret_end - caret_start);
 			DisplayUi->SetClipboardText(Utils::EncodeUTF(selected));
 		}
 	}
