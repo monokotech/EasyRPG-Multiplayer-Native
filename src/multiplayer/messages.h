@@ -497,14 +497,14 @@ namespace Messages {
 			PlayerPacket::Serialize(os);
 			WritePartial(os, pic_id, map_x, map_y, pan_x, pan_y,
 				(int16_t)params.position_x, (int16_t)params.position_y,
-				(int16_t)params.magnify, (int16_t)params.top_trans, (int16_t)params.bottom_trans,
+				(int16_t)params.top_trans, (int16_t)params.bottom_trans,
 				(uint8_t)params.red, (uint8_t)params.green, (uint8_t)params.blue, (uint8_t)params.saturation,
-				(int16_t)params.effect_mode, (int16_t)params.effect_power);
+				(int16_t)params.effect_mode, (int16_t)params.effect_power,
+				(int16_t)params.magnify_width, (int16_t)params.magnify_height);
 		}
 		static void BuildParams(Game_Pictures::Params& p, std::istream& is) {
 			p.position_x = ReadS16(is);
 			p.position_y = ReadS16(is);
-			p.magnify = ReadS16(is);
 			p.top_trans = ReadS16(is);
 			p.bottom_trans = ReadS16(is);
 			p.red = ReadU8(is);
@@ -513,6 +513,8 @@ namespace Messages {
 			p.saturation = ReadU8(is);
 			p.effect_mode = ReadS16(is);
 			p.effect_power = ReadS16(is);
+			p.magnify_width = ReadS16(is);
+			p.magnify_height = ReadS16(is);
 		}
 	};
 
