@@ -1,6 +1,6 @@
 # Settings (See .../settings/secrets/actions)
 # +- secrets: APK_KEY_ALIAS, APK_KEY_PASSWORD, APK_STORE_FILE_B64
-# +- variables: TOOLCHAIN_RELEASE_NAME
+# +- variables: TOOLCHAIN_RELEASE_NAME, MACOS_TOOLCHAIN_OLDPATH
 
 name: Cross-platform Compilation
 
@@ -65,7 +65,7 @@ jobs:
 
       - name: Compile
         run: |
-          VER="(GA, `date +%Y-%m-%d`)"
+          VER="(GithubActions, `date +%Y-%m-%d`)"
           cmake -G Ninja -B build . \
             -DBUILD_CLIENT=off -DBUILD_SERVER=on \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=usr \
@@ -126,6 +126,7 @@ jobs:
       - name: Setup Env
         run: |
           echo "TAG_BRANCH=$(echo ${{ github.ref_name }} | sed -E '/@/ s/^[^-]+?-//')" >> "$GITHUB_ENV"
+          echo "PLAYER_VERSION_APPEND=\"(GithubActions, $(date +%Y-%m-%d))\"" >> "$GITHUB_ENV"
 
       - name: Setup Toolchain
         run: |
@@ -143,7 +144,7 @@ jobs:
             -DPLAYER_BUILD_LIBLCF=on ^
             -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" ^
             -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" ^
-            -DPLAYER_MULTIPLAYER=on
+            -DPLAYER_MULTIPLAYER=on -DPLAYER_VERSION_APPEND=${{ env.PLAYER_VERSION_APPEND }}
           :: https://stackoverflow.com/questions/19024259/how-to-change-the-build-type-to-release-mode-in-cmake/20423820#20423820
           cmake --build build --config RelWithDebInfo
 
@@ -215,9 +216,11 @@ jobs:
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
           ORG_GRADLE_PROJECT_ABI_FILTERS_RELEASE: ${{ matrix.abi }}
         run: |
+          VER="(GithubActions/`date +%Y-%m-%d`)"
           cmake_opts="-DPLAYER_MULTIPLAYER=on -DCMAKE_BUILD_TYPE=Release -DPLAYER_BUILD_LIBLCF=on"" "
           cmake_opts+="-DPLAYER_BUILD_LIBLCF_GIT='https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf'"" "
-          cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"
+          cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"" "
+          cmake_opts+="-DPLAYER_VERSION_APPEND='$VER'"
           cd builds/android
           ./gradlew -PtoolchainDirs="${{ github.workspace }}/toolchain" \
             -PcmakeOptions="$cmake_opts" \
@@ -269,7 +272,7 @@ jobs:
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
           # fix: Imported target ... includes non-existent path
           # grep: -I is to exclude binary files
-          oldpath="/Users/runner/work/EasyRPG-buildscripts/EasyRPG-buildscripts/macos/x86_64"; \
+          oldpath="${{ vars.MACOS_TOOLCHAIN_OLDPATH }}"; \
             grep toolchain -I -l -r -e "$oldpath" | \
             xargs -I{} sed -i '' "s|$oldpath|${{ github.workspace }}/toolchain/universal|g" "{}"
 
@@ -305,11 +308,11 @@ jobs:
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  web:
+  webplayer:
     runs-on: ubuntu-latest
 
     env:
-      FILENAME: "EPMP-${{ github.ref_name }}-Web"
+      FILENAME: "EPMP-${{ github.ref_name }}-WebPlayer"
 
     steps:
       - name: Clone Repository
