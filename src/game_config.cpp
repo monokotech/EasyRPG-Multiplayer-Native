@@ -458,6 +458,7 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
 	multiplayer.client_remote_address.FromIni(ini);
 	multiplayer.client_socks5_address.FromIni(ini);
 	multiplayer.client_chat_immersive_mode.FromIni(ini);
+	multiplayer.client_chat_splitscreen_mode.FromIni(ini);
 	multiplayer.client_chat_visibility.FromIni(ini);
 	multiplayer.client_chat_name.FromIni(ini);
 	multiplayer.client_chat_crypt_key.FromIni(ini);
@@ -554,6 +555,7 @@ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
 	multiplayer.client_remote_address.ToIni(os);
 	multiplayer.client_socks5_address.ToIni(os);
 	multiplayer.client_chat_immersive_mode.ToIni(os);
+	multiplayer.client_chat_splitscreen_mode.ToIni(os);
 	multiplayer.client_chat_visibility.ToIni(os);
 	multiplayer.client_chat_name.ToIni(os);
 	multiplayer.client_chat_crypt_key.ToIni(os);

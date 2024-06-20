@@ -27,6 +27,7 @@ public:
 
 	void Refresh(); // initializes chat or refreshes its theme
 	void Update(); // called once per logical frame
+	void OnResolutionChange();
 	void SetFocus(bool focused);
 
 	void GotMessage(int visibility, int room_id, std::string name,

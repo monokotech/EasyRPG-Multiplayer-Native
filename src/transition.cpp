@@ -188,6 +188,11 @@ void Transition::Draw(Bitmap& dst) {
 	int w = dst.GetWidth();
 	int h = dst.GetHeight();
 
+	w = w > screen1->GetWidth() ? screen1->GetWidth() : w;
+	h = h > screen1->GetHeight() ? screen1->GetHeight() : h;
+	w = w > screen2->GetWidth() ? screen2->GetWidth() : w;
+	h = h > screen2->GetHeight() ? screen2->GetHeight() : h;
+
 	if (flash_iterations > 0) {
 		auto color = Flash::MakeColor(flash.red, flash.green, flash.blue, flash.current_level);
 		dst.BlendBlit(0, 0, *screen1, screen1->GetRect(), color, 255);

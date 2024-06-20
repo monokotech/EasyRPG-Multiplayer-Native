@@ -909,6 +909,8 @@ bool Player::ChangeResolution(int width, int height) {
 		Main_Data::game_quit->OnResolutionChange();
 	}
 
+	CUI().OnResolutionChange();
+
 	Output::Debug("Resolution changed to {}x{}", width, height);
 	return true;
 }

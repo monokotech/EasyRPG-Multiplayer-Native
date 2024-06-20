@@ -48,6 +48,12 @@
 
 namespace {
 
+using VisibilityType = Messages::VisibilityType;
+
+/**
+ * Online Status
+ */
+
 class DrawableOnlineStatus : public Drawable {
 	Rect bounds;
 
@@ -57,6 +63,11 @@ class DrawableOnlineStatus : public Drawable {
 
 	BitmapRef conn_status;
 	BitmapRef room_status;
+
+	bool m_status = false;
+	bool m_connecting = false;
+	unsigned int m_room_id = 0;
+
 public:
 	DrawableOnlineStatus(int x, int y, int w, int h)
 		: Drawable(Priority::Priority_Maximum, Drawable::Flags::Global),
@@ -69,6 +80,14 @@ public:
 		SetRoomStatus(0);
 	}
 
+	void SetX(unsigned int x) {
+		bounds.x = x;
+	}
+
+	void SetY(unsigned int y) {
+		bounds.y = y;
+	}
+
 	void Draw(Bitmap& dst) {
 		dst.Blit(bounds.x + padding_horz, bounds.y + padding_vert,
 			*conn_status, conn_status->GetRect(), Opacity::Opaque());
@@ -77,9 +96,15 @@ public:
 			*room_status, r_rect, Opacity::Opaque());
 	};
 
-	void RefreshTheme() { }
+	void RefreshTheme() {
+		SetConnectionStatus(m_status, m_connecting);
+		SetRoomStatus(m_room_id);
+	}
 
 	void SetConnectionStatus(bool status, bool connecting = false) {
+		m_status = status;
+		m_connecting = connecting;
+
 		std::string conn_label = "";
 		if (connecting)
 			conn_label = "Connecting";
@@ -92,6 +117,8 @@ public:
 	}
 
 	void SetRoomStatus(unsigned int room_id) {
+		m_room_id = room_id;
+
 		std::string room_label = "";
 		room_label = "Room #" + std::to_string(room_id);
 		auto r_rect = Text::GetSize(*Font::Default(), room_label);
@@ -100,7 +127,9 @@ public:
 	}
 };
 
-using VisibilityType = Messages::VisibilityType;
+/**
+ * ChatLog
+ */
 
 struct ChatEntry {
 	std::string color_a; // text a
@@ -402,6 +431,15 @@ public:
 		RefreshMessages();
 	}
 
+	void SetX(unsigned int x) {
+		bounds.x = x;
+	}
+
+	void SetY(unsigned int y) {
+		bounds.y = y;
+		RefreshScroll();
+	}
+
 	void SetHeight(unsigned int h) {
 		bounds.height = h;
 		RefreshScroll();
@@ -568,6 +606,10 @@ public:
 	}
 };
 
+/**
+ * Type Box
+ */
+
 class DrawableTypeBox : public Drawable {
 	Rect bounds;
 	// design parameters
@@ -609,6 +651,14 @@ public:
 		// initialize
 		UpdateTypeText(std::u32string());
 		SetLabel("");
+	}
+
+	void SetX(unsigned int x) {
+		bounds.x = x;
+	}
+
+	void SetY(unsigned int y) {
+		bounds.y = y;
 	}
 
 	void Draw(Bitmap& dst) {
@@ -703,17 +753,25 @@ public:
 	}
 };
 
+/**
+ * ChatUi: Integrate other Drawables
+ */
+
 class DrawableChatUi : public Drawable {
 	// design parameters
-	const unsigned int chat_width = Player::screen_width * 0.725;
-	const unsigned int chat_left = Player::screen_width - chat_width;
-	const unsigned int notification_log_height = Player::screen_height * 0.275;
+	const unsigned int chat_width = SCREEN_TARGET_WIDTH * 0.725;
+	const unsigned int chat_height = SCREEN_TARGET_HEIGHT;
+	const unsigned int notification_log_height = SCREEN_TARGET_HEIGHT * 0.275;
+	const unsigned int notification_log_top = SCREEN_TARGET_HEIGHT - notification_log_height;
 	const unsigned int panel_frame_left_top = 4; // width of panel's visual frame (border width is missing)
 	const unsigned int panel_frame_right_bottom = 6; // on right and bottom side (including border width)
 	const unsigned int status_height = 19; // height of status region on top of chatlog
-	const unsigned int log_scroll_delta = (Player::screen_height - status_height) / 16;
+	const unsigned int log_scroll_delta = (SCREEN_TARGET_HEIGHT - status_height) / 16;
 	const unsigned int type_height = 19; // height of type box
 	const unsigned int type_border_offset = 8; // width of type border offset
+
+	unsigned int screen_width = SCREEN_TARGET_WIDTH;
+	unsigned int screen_height = SCREEN_TARGET_HEIGHT;
 
 	DrawableChatLog d_notification_log;
 	bool notification_log_shown = true;
@@ -722,7 +780,12 @@ class DrawableChatUi : public Drawable {
 	DrawableOnlineStatus d_status;
 	DrawableChatLog d_log;
 	DrawableTypeBox d_type;
+	unsigned int chat_top = 0;
+	unsigned int chat_left = 0;
+	bool is_focused = false;
+	bool is_vertical = false;
 	bool immersive_mode_flag = false;
+	bool split_screen_flag = false;
 
 	void UpdateTypePanel() {
 		if (d_type.IsVisible()) {
@@ -730,23 +793,32 @@ class DrawableChatUi : public Drawable {
 			const unsigned int f = -8;
 			const auto form_rect = d_type.GetFormBounds();
 			back_panel.SetCursorRect(
-				Rect((f - type_border_offset) + form_rect.x - chat_left, f + form_rect.y,
+				Rect((f - type_border_offset) + form_rect.x - chat_left, f + form_rect.y - chat_top,
 					form_rect.width + type_border_offset, form_rect.height));
 		} else {
 			back_panel.SetCursorRect(Rect(0, 0, 0, 0));
 		}
 	}
+
+	void UpdateVisibility() {
+		bool is_visible = split_screen_flag ? true : is_focused;
+		if (notification_log_shown)
+			d_notification_log.SetVisible(split_screen_flag ? is_visible : !is_focused);
+		this->SetVisible(is_visible);
+		if (!immersive_mode_flag)
+			back_panel.SetVisible(is_visible);
+		d_status.SetVisible(is_visible);
+		d_log.SetVisible(is_visible);
+	}
+
 public:
 	DrawableChatUi()
 		: Drawable(Priority::Priority_Maximum, Drawable::Flags::Global),
-		d_notification_log(0, Player::screen_height - notification_log_height,
-			Player::screen_width, notification_log_height),
-		back_panel(chat_left, 0, chat_width, Player::screen_height, Drawable::Flags::Global),
-		d_status(chat_left + panel_frame_left_top, 0, chat_width - panel_frame_right_bottom, status_height),
-		d_log(chat_left + panel_frame_left_top, status_height,
-			chat_width - panel_frame_right_bottom, Player::screen_height - status_height),
-		d_type(chat_left + panel_frame_left_top, Player::screen_height - type_height - panel_frame_left_top,
-			chat_width - panel_frame_right_bottom - type_border_offset, type_height)
+		d_notification_log(0, 0, SCREEN_TARGET_WIDTH, notification_log_height),
+		back_panel(0, 0, chat_width, chat_height, Drawable::Flags::Global),
+		d_status(0, 0, chat_width - panel_frame_right_bottom, status_height),
+		d_log(0, 0, chat_width - panel_frame_right_bottom, chat_height - status_height),
+		d_type(0, 0, chat_width - panel_frame_right_bottom - type_border_offset, type_height)
 	{
 		DrawableMgr::Register(this);
 
@@ -792,6 +864,27 @@ public:
 		d_type.RefreshTheme();
 	}
 
+	void UpdatePosition() {
+		if (!split_screen_flag) {
+			screen_width = Player::screen_width;
+			screen_height = Player::screen_height;
+		}
+
+		d_notification_log.SetY(notification_log_top);
+
+		chat_left = screen_width - chat_width;
+		back_panel.SetX(chat_left);
+		d_status.SetX(chat_left + panel_frame_left_top);
+		d_log.SetX(chat_left + panel_frame_left_top);
+		d_type.SetX(immersive_mode_flag ? chat_left : chat_left + panel_frame_left_top);
+
+		chat_top = screen_height - chat_height;
+		back_panel.SetY(chat_top);
+		d_status.SetY(chat_top);
+		d_log.SetY(chat_top + status_height);
+		d_type.SetY(screen_height - type_height - panel_frame_left_top);
+	}
+
 	void UpdateTypeText(std::u32string text, unsigned int caret_seek_tail, unsigned int caret_seek_head) {
 		d_type.UpdateTypeText(text);
 		d_type.SeekCaret(caret_seek_tail, caret_seek_head);
@@ -827,22 +920,17 @@ public:
 	}
 
 	void SetFocus(bool focused) {
-		if (notification_log_shown)
-			d_notification_log.SetVisible(!focused);
-		this->SetVisible(focused);
-		if (!immersive_mode_flag)
-			back_panel.SetVisible(focused);
-		d_status.SetVisible(focused);
-		d_log.SetVisible(focused);
+		is_focused = focused;
 		d_type.SetVisible(focused);
+		UpdateVisibility();
 		UpdateTypePanel();
 		d_log.ShowScrollBar(focused);
 		if (focused) {
-			d_log.SetHeight(Player::screen_height - status_height - type_height - panel_frame_right_bottom);
+			d_log.SetHeight(chat_height - status_height - type_height - panel_frame_right_bottom);
 			DisplayUi->StartTextInput();
 			UpdateTypeTextInputRect();
 		} else {
-			d_log.SetHeight(Player::screen_height - status_height - panel_frame_right_bottom);
+			d_log.SetHeight(chat_height - status_height - panel_frame_right_bottom);
 			d_log.SetScroll(0);
 			DisplayUi->StopTextInput();
 		}
@@ -855,10 +943,46 @@ public:
 		d_log.SetOverlayMode(enabled, false, false);
 		if (!immersive_mode_flag)
 			back_panel.SetWindowskin(Cache::SystemOrBlack());
+		UpdatePosition();
+		UpdateTypePanel();
 	}
 
-	void SetImmersiveMode() {
+	void ToggleImmersiveMode() {
 		SetImmersiveMode(!immersive_mode_flag);
+	}
+
+	void SetSplitScreenMode(bool enable, bool vertical, bool toggle) {
+		if (toggle && split_screen_flag == enable && is_vertical == vertical) {
+			enable = !enable;
+		}
+		split_screen_flag = enable;
+		if (split_screen_flag) {
+			if (!vertical) {
+				screen_width = Player::screen_width + chat_width;
+				screen_height = Player::screen_height;
+				GMI().GetConfig().client_chat_splitscreen_mode.Set(1);
+			} else {
+				screen_width = Player::screen_width;
+				screen_height = Player::screen_height + chat_height;
+				GMI().GetConfig().client_chat_splitscreen_mode.Set(2);
+			}
+			is_vertical = vertical;
+		} else {
+			screen_width = Player::screen_width;
+			screen_height = Player::screen_height;
+			is_vertical = false;
+			GMI().GetConfig().client_chat_splitscreen_mode.Set(0);
+		}
+		DisplayUi->ChangeDisplaySurfaceResolution(screen_width, screen_height);
+		UpdateVisibility();
+		UpdatePosition();
+	}
+
+	void UpdateDisplaySurfaceResolution() {
+		if (split_screen_flag) {
+			DisplayUi->ChangeDisplaySurfaceResolution(screen_width, screen_height);
+		}
+		UpdatePosition();
 	}
 
 	unsigned short GetVisibilityFlags() {
@@ -879,16 +1003,26 @@ public:
 	}
 };
 
+/**
+ * ChatUi
+ */
+
 const unsigned int MAXCHARSINPUT_MESSAGE = 200;
 const unsigned int MAXMESSAGES = 500;
 const unsigned int MAXNOTIFICATIONS = 3;
 
-std::u32string type_text;
-unsigned int type_caret_index_tail = 0; // anchored when SHIFT-selecting text
-unsigned int type_caret_index_head = 0; // moves when SHIFT-selecting text
 std::unique_ptr<DrawableChatUi> chat_box; // chat renderer
 std::vector<std::unique_ptr<ChatEntry>> chat_log;
 std::vector<std::unique_ptr<ChatEntry>> chat_notification_log;
+
+std::u32string type_text;
+unsigned int type_caret_index_tail = 0; // anchored when SHIFT-selecting text
+unsigned int type_caret_index_head = 0; // moves when SHIFT-selecting text
+
+bool initialized = false;
+int update_counter = 0;
+int counter_chatbox = 0;
+
 VisibilityType chat_visibility = Messages::CV_LOCAL;
 bool cheat_flag = false;
 
@@ -960,32 +1094,42 @@ void InitHello() {
 	AddLogEntry("• Type !help to list commands.", "", "", Messages::CV_LOCAL);
 }
 
-void ShowUsage() {
+void ShowUsage(Strfnd& fnd) {
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
 	AddLogEntry("", "Usage:", "", Messages::CV_LOCAL);
 	AddLogEntry("", "[...] Optional | <...> Required", "", Messages::CV_LOCAL);
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
-	AddLogEntry("!server [on, off]", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "turn on/off the server", "", Messages::CV_LOCAL);
-	AddLogEntry("!connect [address]", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "connect to the server", "", Messages::CV_LOCAL);
-	AddLogEntry("!disconnect", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "disconnect from server", "", Messages::CV_LOCAL);
-	AddLogEntry("!name [text]", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "change chat name", "", Messages::CV_LOCAL);
-	AddLogEntry("!chat [LOCAL, GLOBAL, CRYPT] [CRYPT Password]", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "switch visibility to chat", "", Messages::CV_LOCAL);
-	AddLogEntry("!log [LOCAL, GLOBAL, CRYPT]", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "toggle visibility", "", Messages::CV_LOCAL);
-	AddLogEntry("!immersive", "", "", Messages::CV_LOCAL);
-	AddLogEntry("- ", "toggle the immersive mode", "", Messages::CV_LOCAL);
-}
-
-void Initialize() {
-	chat_box = std::make_unique<DrawableChatUi>();
-	InitHello();
-	// initialize saved settings
-	SetChatVisibility(GMI().GetConfig().client_chat_visibility.Get());
+	std::string doc_name = fnd.next(" ");
+	if (doc_name.empty()) {
+		AddLogEntry("<!server, !srv> [on, off]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "turn on/off the server", "", Messages::CV_LOCAL);
+		AddLogEntry("<!connect, !c> [address, <empty>]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "connect to the server", "", Messages::CV_LOCAL);
+		AddLogEntry("<!disconnect, !d>", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "disconnect from server", "", Messages::CV_LOCAL);
+		AddLogEntry("!name [text, <unknown>]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "change chat name", "", Messages::CV_LOCAL);
+		AddLogEntry("!chat [LOCAL, GLOBAL, CRYPT] [CRYPT Password]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "switch visibility to chat", "", Messages::CV_LOCAL);
+		AddLogEntry("!log [LOCAL, GLOBAL, CRYPT]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "toggle visibility", "", Messages::CV_LOCAL);
+		AddLogEntry("<!immersive, !imm>", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "toggle the immersive mode", "", Messages::CV_LOCAL);
+		AddLogEntry("<!splitscreen, !ss> [vertically, v]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "toggle the split-screen mode", "", Messages::CV_LOCAL);
+	} else if (doc_name == "cheat") {
+		AddLogEntry("!cheat", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "Toggle cheat mode", "", Messages::CV_LOCAL);
+		AddLogEntry("", "(The following commands depend on this mode)", "", Messages::CV_LOCAL);
+		AddLogEntry("!getvar <id> | !setvar <id> <value>", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "Get/Set variables", "", Messages::CV_LOCAL);
+		AddLogEntry("!getsw <id> | !setsw <id> <0, 1>", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "Get/Set switches", "", Messages::CV_LOCAL);
+		AddLogEntry("!debug", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "Enable TestPlay mode", "", Messages::CV_LOCAL);
+	} else {
+		AddLogEntry(std::string("No entry for ") + doc_name, "", "", Messages::CV_LOCAL);
+	}
 }
 
 void ToggleCheat() {
@@ -1180,7 +1324,11 @@ void InputsTyping() {
 			AddClientInfo("Flags: " + flags);
 		// command: !immersive
 		} else if (command == "!immersive" || command == "!imm") {
-			chat_box->SetImmersiveMode();
+			chat_box->ToggleImmersiveMode();
+		// command: !splitscreen
+		} else if (command == "!splitscreen" || command == "!ss") {
+			std::string vert = fnd.next(" ");
+			chat_box->SetSplitScreenMode(true, vert == "vertically" || vert == "v" ? true : false, true);
 		// command: !cheat
 		} else if (command == "!cheat") {
 			ToggleCheat();
@@ -1212,7 +1360,7 @@ void InputsTyping() {
 			AddClientInfo("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !help
 		} else if (command == "!help") {
-			ShowUsage();
+			ShowUsage(fnd);
 		} else {
 			if (text != "") {
 				if (chat_visibility == Messages::CV_CRYPT) {
@@ -1239,7 +1387,34 @@ void InputsTyping() {
 	chat_box->UpdateTypeTextInputRect();
 }
 
-void ProcessInputs() {
+void Update() {
+	if (!initialized) {
+		++update_counter;
+
+		if (counter_chatbox == 0) {
+			auto ptr = Scene::Find(Scene::SceneType::Title);
+			if (!ptr) ptr = Scene::Find(Scene::SceneType::Map);
+			if (!ptr) ptr = Scene::Find(Scene::SceneType::GameBrowser);
+			if (ptr) counter_chatbox = update_counter;
+		}
+
+		if (counter_chatbox > 0) {
+			int counter = update_counter - counter_chatbox;
+			if (counter == 7) {
+				chat_box = std::make_unique<DrawableChatUi>();
+				InitHello();
+				SetChatVisibility(GMI().GetConfig().client_chat_visibility.Get());
+			} else if (counter == 8) {
+				int splitscreen_mode = GMI().GetConfig().client_chat_splitscreen_mode.Get();
+				if (splitscreen_mode)
+					chat_box->SetSplitScreenMode(splitscreen_mode, splitscreen_mode == 2, false);
+				initialized = true;
+			}
+		}
+	}
+
+	if (chat_box == nullptr) return;
+
 	InputsFocusUnfocus();
 	InputsLog();
 	InputsTyping();
@@ -1264,14 +1439,12 @@ void ChatUi::Refresh() {
 }
 
 void ChatUi::Update() {
-	if (chat_box == nullptr) {
-		for (int e = Scene::SceneType::Title; e < Scene::SceneType::Map; ++e) {
-			if (Scene::Find(static_cast<Scene::SceneType>(e)) != nullptr)
-				Initialize();
-		}
-	} else {
-		ProcessInputs();
-	}
+	::Update();
+}
+
+void ChatUi::OnResolutionChange() {
+	if (chat_box == nullptr) return;
+	chat_box->UpdateDisplaySurfaceResolution();
 }
 
 void ChatUi::SetFocus(bool focused) {
