@@ -1244,13 +1244,15 @@ if(${PLAYER_BUILD_EXECUTABLE} AND ${PLAYER_TARGET_PLATFORM} MATCHES "^SDL(1|2)$"
 		# Prevent Emscripten from pulling in bundled SDL headers that break the build
 		target_compile_options(${PROJECT_NAME} PUBLIC "-sUSE_SDL=0")
 
+		set(PLAYER_JS_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-library.js")
 		set(PLAYER_JS_PREJS "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-pre.js")
 		set(PLAYER_JS_POSTJS "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-post.js")
 		set(PLAYER_JS_SHELL "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-shell.html")
 
 		set_property(TARGET ${EXE_NAME} PROPERTY LINK_FLAGS
 			"-sALLOW_MEMORY_GROWTH -sMINIFY_HTML=0 -sMODULARIZE -sEXPORT_NAME=createEasyRpgPlayer \
-			 -sEXIT_RUNTIME --bind --pre-js ${PLAYER_JS_PREJS} --post-js ${PLAYER_JS_POSTJS} \
+			 -sEXIT_RUNTIME --bind --js-library ${PLAYER_JS_LIBRARY} \
+			 --pre-js ${PLAYER_JS_PREJS} --post-js ${PLAYER_JS_POSTJS} \
 			 -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['$autoResumeAudioContext','$dynCall'] \
 			 -sEXPORTED_FUNCTIONS=_main,_malloc,_free")
 		set_source_files_properties("src/platform/sdl/main.cpp" PROPERTIES

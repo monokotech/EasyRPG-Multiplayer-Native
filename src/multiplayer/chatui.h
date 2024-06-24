@@ -36,6 +36,7 @@ public:
 	void GotInfo(std::string msg);
 	void SetStatusConnection(bool connected, bool connecting = false);
 	void SetStatusRoom(unsigned int room_id);
+	void SetStatusProgress(unsigned int percent);
 };
 
 inline ChatUi& CUI() { return ChatUi::Instance(); }

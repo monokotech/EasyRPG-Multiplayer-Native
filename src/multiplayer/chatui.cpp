@@ -67,6 +67,7 @@ class DrawableOnlineStatus : public Drawable {
 	bool m_status = false;
 	bool m_connecting = false;
 	unsigned int m_room_id = 0;
+	unsigned int m_progress_percent = 100;
 
 public:
 	DrawableOnlineStatus(int x, int y, int w, int h)
@@ -97,8 +98,8 @@ public:
 	};
 
 	void RefreshTheme() {
-		SetConnectionStatus(m_status, m_connecting);
-		SetRoomStatus(m_room_id);
+		UpdateConnectionStatus();
+		UpdateRoomStatus();
 	}
 
 	void SetConnectionStatus(bool status, bool connecting = false) {
@@ -116,14 +117,35 @@ public:
 		Text::Draw(*conn_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 2, conn_label);
 	}
 
+	void UpdateConnectionStatus() {
+		SetConnectionStatus(m_status, m_connecting);
+	}
+
 	void SetRoomStatus(unsigned int room_id) {
 		m_room_id = room_id;
 
 		std::string room_label = "";
-		room_label = "Room #" + std::to_string(room_id);
+
+		if (m_progress_percent < 100) {
+			room_label = std::to_string(m_progress_percent) + "% #" + std::to_string(room_id);
+		} else {
+			room_label = "Room #" + std::to_string(room_id);
+		}
+
 		auto r_rect = Text::GetSize(*Font::Default(), room_label);
 		room_status = Bitmap::Create(r_rect.width + 1, r_rect.height + 1, true);
 		Text::Draw(*room_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 1, room_label);
+	}
+
+	void UpdateRoomStatus() {
+		SetRoomStatus(m_room_id);
+	}
+
+	void SetProgressStatus(unsigned int percent) {
+		if (m_progress_percent != percent) {
+			m_progress_percent = percent;
+			UpdateRoomStatus();
+		}
 	}
 };
 
@@ -855,6 +877,10 @@ public:
 		d_status.SetRoomStatus(room_id);
 	}
 
+	void SetStatusProgress(unsigned int percent) {
+		d_status.SetProgressStatus(percent);
+	}
+
 	void RefreshTheme() {
 		if (!immersive_mode_flag)
 			back_panel.SetWindowskin(Cache::SystemOrBlack());
@@ -1501,4 +1527,10 @@ void ChatUi::SetStatusRoom(unsigned int room_id) {
 	if (chat_box == nullptr)
 		return;
 	chat_box->SetStatusRoom(room_id);
+}
+
+void ChatUi::SetStatusProgress(unsigned int percent) {
+	if (chat_box == nullptr)
+		return;
+	chat_box->SetStatusProgress(percent);
 }

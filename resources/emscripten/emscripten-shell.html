@@ -193,7 +193,7 @@
     </div>
   </div>
 
-{{{ SCRIPT }}}
+<div id="scriptTagText"><!--{{{ SCRIPT }}}--></div>
 
 <script>
 const hasTouchscreen = window.matchMedia('(hover: none), (pointer: coarse)').matches;
@@ -205,24 +205,26 @@ let easyrpgPlayer;
 let lastTouchedId;
 
 // Launch the Player and configure it
-window.addEventListener('load', (event) => {
-    createEasyRpgPlayer({
-      game: undefined,
-      saveFs: undefined
-    }).then(function(Module) {
-      // Module is ready
-      easyrpgPlayer = Module;
-      easyrpgPlayer.initApi();
+function launch(done) {
+  createEasyRpgPlayer({
+    game: undefined,
+    saveFs: undefined
+  }).then(function(Module) {
+    // Module is ready
+    easyrpgPlayer = Module;
+    easyrpgPlayer.initApi();
 
-      // Custom code here
-      const textInputHelper = TextInputHelper(Module);
-      Module.api_private.startTextInput_js = textInputHelper.startTextInput;
-      Module.api_private.stopTextInput_js = textInputHelper.stopTextInput;
-      Module.api_private.setTextInputRect_js = textInputHelper.setTextInputRect;
-      Module.api_private.getClipboardText_js = textInputHelper.getClipboardText;
-      Module.api_private.setClipboardText_js = textInputHelper.setClipboardText;
-    });
-});
+    // Custom code here
+    const textInputHelper = TextInputHelper(Module);
+    Module.api_private.startTextInput_js = textInputHelper.startTextInput;
+    Module.api_private.stopTextInput_js = textInputHelper.stopTextInput;
+    Module.api_private.setTextInputRect_js = textInputHelper.setTextInputRect;
+    Module.api_private.getClipboardText_js = textInputHelper.getClipboardText;
+    Module.api_private.setClipboardText_js = textInputHelper.setClipboardText;
+
+    done();
+  });
+}
 
 /**
  * Make EasyRPG player embeddable (focusable)
@@ -518,6 +520,56 @@ function TextInputHelper(Module) {
 
   return methods;
 }
+
+(function(done) {
+  const progressBar = document.createElement('progress');
+  progressBar.style.cssText = "position: absolute; top: 0; left: 0; width: 4rem;";
+  progressBar.max = 100;
+  document.body.append(progressBar);
+
+  // https://stackoverflow.com/questions/10420352/converting-file-size-in-bytes-to-human-readable-string/14919494#14919494
+  window.bytesToPercent = function(bytes) {
+    const thresh = 100;
+    if (bytes < thresh) return bytes;
+    let u = -1;
+    do {
+      bytes /= thresh;
+      ++u;
+    } while (bytes >= thresh && u < 10);
+    return bytes * 10 % 99;
+  }
+
+  // https://stackoverflow.com/questions/65491241/get-webassembly-instantiatestreaming-progress
+  async function fetchWithProgress(path) {
+    const response = await oldFetch(path);
+    const contentLength = response.headers.get("Content-Length");
+    const total = parseInt(contentLength, 10);
+    let bytesLoaded = 0;
+    return new Response(response.body.pipeThrough(new TransformStream({
+      transform(chunk, controller) {
+        bytesLoaded += chunk.byteLength;
+        if (contentLength !== null) {
+          progressBar.value = bytesLoaded / total * 100;
+        } else {
+          progressBar.value = bytesToPercent(bytesLoaded);
+        }
+        controller.enqueue(chunk);
+      }
+    })), response);
+  }
+  const oldFetch = window.fetch;
+  window.fetch = fetchWithProgress;
+
+  // load emscripten script
+  const scriptTagDiv = document.createElement('div');
+  scriptTagDiv.innerHTML = scriptTagText.childNodes[0].nodeValue;
+  fetch(scriptTagDiv.children[0].src).then(response => response.text()).then(text => {
+    const script = document.createElement('script');
+    script.textContent = text;
+    document.body.appendChild(script);
+    done(() => progressBar.style.display = 'none');
+  });
+})(launch);
 </script>
 
 </body>

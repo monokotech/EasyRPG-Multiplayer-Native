@@ -27,6 +27,10 @@
 #  include "external/picojson.h"
 #endif
 
+#ifdef EMSCRIPTEN
+#  include <emscripten/eventloop.h>
+#endif
+
 #include "async_handler.h"
 #include "cache.h"
 #include "filefinder.h"
@@ -38,6 +42,8 @@
 #include "transition.h"
 #include "rand.h"
 
+#include "multiplayer/chatui.h"
+
 // When this option is enabled async requests are randomly delayed.
 // This allows testing some aspects of async file fetching locally.
 //#define EP_DEBUG_SIMULATE_ASYNC
@@ -48,6 +54,7 @@ namespace {
 	int next_id = 0;
 #ifdef EMSCRIPTEN
 	int index_version = 1;
+	std::unordered_map<std::string, int> download_progresses;
 #endif
 
 	FileRequestAsync* GetRequest(const std::string& path) {
@@ -71,23 +78,53 @@ namespace {
 	}
 
 #ifdef EMSCRIPTEN
-	constexpr size_t ASYNC_MAX_RETRY_COUNT{ 16 };
+	void update_status() {
+		int percent = 0;
+		for (const auto& it : download_progresses) {
+			if (it.second > percent) percent = it.second;
+		}
+		CUI().SetStatusProgress(download_progresses.empty() ? 100 : percent);
+	}
 
 	struct async_download_context {
 		std::string url, file, param;
 		FileRequestAsync* obj;
-		size_t count;
+
+		int handle = 0;
+		long timeout_id = 0;
 
 		async_download_context(
 			std::string u,
 			std::string f,
 			std::string p,
 			FileRequestAsync* o
-		) : url{ std::move(u) }, file{ std::move(f) }, param{ std::move(p) }, obj{ o }, count{} {}
+		) : url{ std::move(u) }, file{ std::move(f) }, param{ std::move(p) }, obj{ o } {}
 	};
+
+	void download_clear_timeout_retry(async_download_context* ctx) {
+		if (ctx->timeout_id) {
+			emscripten_clear_interval(ctx->timeout_id);
+			ctx->timeout_id = 0;
+		}
+	}
+
+	void download_failure_retry(unsigned, void* userData, int status);
+
+	void download_set_timeout_retry(async_download_context* ctx) {
+		download_clear_timeout_retry(ctx);
+		ctx->timeout_id = emscripten_set_interval([](void* userData) {
+			auto ctx = static_cast<async_download_context*>(userData);
+			Output::Debug("DL Failure: timed out: {}", ctx->obj->GetPath());
+			emscripten_async_wget2_abort(ctx->handle);
+			download_failure_retry(ctx->handle, ctx, 0);
+		}, 30000, ctx);
+	}
 
 	void download_success_retry(unsigned, void* userData, const char*) {
 		auto ctx = static_cast<async_download_context*>(userData);
+		download_clear_timeout_retry(ctx);
+		download_progresses.erase(ctx->obj->GetPath());
+		update_status();
 		ctx->obj->DownloadDone(true);
 		delete ctx;
 	}
@@ -96,25 +133,29 @@ namespace {
 
 	void download_failure_retry(unsigned, void* userData, int status) {
 		auto ctx = static_cast<async_download_context*>(userData);
-		++ctx->count;
-		if (ctx->count >= ASYNC_MAX_RETRY_COUNT) {
-			Output::Warning("DL Failure: max retries exceeded: {}", ctx->obj->GetPath());
-			ctx->obj->DownloadDone(false);
-			delete ctx;
-			return;
-		}
+		download_clear_timeout_retry(ctx);
 		if (status >= 400) {
 			Output::Warning("DL Failure: file not available: {}", ctx->obj->GetPath());
 			ctx->obj->DownloadDone(false);
 			delete ctx;
 			return;
 		}
-		Output::Debug("DL Failure: {}. Retrying", ctx->obj->GetPath());
-		start_async_wget_with_retry(ctx);
+		emscripten_set_timeout([](void* userData) {
+			auto ctx = static_cast<async_download_context*>(userData);
+			Output::Debug("DL Failure: {}. Retrying", ctx->obj->GetPath());
+			start_async_wget_with_retry(ctx);
+		}, 5000, ctx);
+	}
+
+	void download_progress_retry(unsigned, void* userData, int percentComplete) {
+		auto ctx = static_cast<async_download_context*>(userData);
+		download_set_timeout_retry(ctx);
+		download_progresses[ctx->obj->GetPath()] = percentComplete;
+		update_status();
 	}
 
 	void start_async_wget_with_retry(async_download_context* ctx) {
-		emscripten_async_wget2(
+		int handle = emscripten_async_wget2(
 			ctx->url.data(),
 			ctx->file.data(),
 			"GET",
@@ -122,8 +163,12 @@ namespace {
 			ctx,
 			download_success_retry,
 			download_failure_retry,
-			nullptr
+			download_progress_retry
 		);
+		download_set_timeout_retry(ctx);
+		ctx->handle = handle;
+		download_progresses.emplace(std::make_pair(ctx->obj->GetPath(), 0));
+		update_status();
 	}
 
 	void async_wget_with_retry(
