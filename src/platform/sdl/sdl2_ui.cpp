@@ -803,7 +803,9 @@ void Sdl2Ui::ProcessEvent(SDL_Event &evnt) {
 void Sdl2Ui::ProcessWindowEvent(SDL_Event &evnt) {
 	int state = evnt.window.event;
 #if PAUSE_GAME_WHEN_FOCUS_LOST
-	if (!Player::IsMultiplayerActive() && state == SDL_WINDOWEVENT_FOCUS_LOST) {
+	if (state == SDL_WINDOWEVENT_FOCUS_LOST
+			&& !Player::IsMultiplayerActive()
+			&& !vcfg.no_pause_game_when_focus_lost.Get()) {
 
 		Player::Pause();
 
@@ -827,7 +829,7 @@ void Sdl2Ui::ProcessWindowEvent(SDL_Event &evnt) {
 		ResetKeys();
 
 		return;
-	} else {
+	} else if (!vcfg.no_pause_game_when_focus_lost.Get()) {
 		if (state == SDL_WINDOWEVENT_FOCUS_LOST) {
 			old_focused_fps_limit = vcfg.fps_limit.Get();
 			old_frame_rate_synchronized = IsFrameRateSynchronized();

@@ -87,7 +87,7 @@ public:
 class ServerSideClient {
 	static constexpr size_t QUEUE_MAX_BULK_SIZE = 4096;
 
-	struct LastState {
+	struct State {
 		MovePacket move;
 		FacingPacket facing;
 		SpeedPacket speed;
@@ -107,29 +107,36 @@ class ServerSideClient {
 	int room_id{0};
 	int chat_crypt_key_hash{0};
 	std::string name{""};
-	LastState last;
+	State state;
+
+	// Some maps won't restore their actions. Reset all here,
+	//  then wait SendSelfRoomInfoAsync() to be called by players
+	void ResetState() {
+		state.repeating_flash.Discard();
+		state.pictures.clear();
+	};
 
 	void SendSelfRoomInfoAsync() {
 		server->ForEachClient([this](const ServerSideClient& other) {
 			if (other.id == id || other.room_id != room_id)
 				return;
 			SendSelfAsync(JoinPacket(other.id));
-			SendSelfAsync(other.last.move);
-			if (other.last.facing.facing != 0)
-				SendSelfAsync(other.last.facing);
-			if (other.last.speed.speed != 0)
-				SendSelfAsync(other.last.speed);
+			SendSelfAsync(other.state.move);
+			if (other.state.facing.facing != 0)
+				SendSelfAsync(other.state.facing);
+			if (other.state.speed.speed != 0)
+				SendSelfAsync(other.state.speed);
 			if (other.name != "")
 				SendSelfAsync(NamePacket(other.id, other.name));
-			if (other.last.sprite.index != -1)
-				SendSelfAsync(other.last.sprite);
-			if (other.last.repeating_flash.IsAvailable())
-				SendSelfAsync(other.last.repeating_flash);
-			if (other.last.hidden.is_hidden)
-				SendSelfAsync(other.last.hidden);
-			if (other.last.system.name != "")
-				SendSelfAsync(other.last.system);
-			for (const auto& it : other.last.pictures) {
+			if (other.state.sprite.index != -1)
+				SendSelfAsync(other.state.sprite);
+			if (other.state.repeating_flash.IsAvailable())
+				SendSelfAsync(other.state.repeating_flash);
+			if (other.state.hidden.is_hidden)
+				SendSelfAsync(other.state.hidden);
+			if (other.state.system.name != "")
+				SendSelfAsync(other.state.system);
+			for (const auto& it : other.state.pictures) {
 				SendSelfAsync(it.second);
 			}
 		});
@@ -160,21 +167,17 @@ class ServerSideClient {
 		});
 
 		connection.RegisterHandler<RoomPacket>([this, Leave](RoomPacket& p) {
-			// Some maps won't restore their actions, reset all here
-			last.repeating_flash.Discard();
-			last.pictures.clear();
+			// 1: Say goodbye to the old room immediately
 			Leave();
+			// 1: Join new room
 			room_id = p.room_id;
+			ResetState();
 			SendSelfAsync(p);
 			SendSelfRoomInfoAsync();
 			SendLocalAsync(JoinPacket(id));
-			SendLocalAsync(last.move);
-			SendLocalAsync(last.facing);
-			SendLocalAsync(last.sprite);
 			if (name != "")
 				SendLocalAsync(NamePacket(id, name));
-			if (last.system.name != "")
-				SendLocalAsync(last.system);
+			// 2: Waiting for the follow-up syncs of SendBasicData() from the client
 		});
 		connection.RegisterHandler<NamePacket>([this](NamePacket& p) {
 			name = std::move(p.name);
@@ -195,7 +198,7 @@ class ServerSideClient {
 			p.type = 1; // 1 = chat
 			p.room_id = room_id;
 			p.name = name == "" ? "<unknown>" : name;
-			p.sys_name = last.system.name;
+			p.sys_name = state.system.name;
 			VisibilityType visibility = static_cast<VisibilityType>(p.visibility);
 			if (visibility == CV_LOCAL) {
 				SendLocalChat(p);
@@ -216,12 +219,13 @@ class ServerSideClient {
 			}
 		});
 		connection.RegisterHandler<TeleportPacket>([this](TeleportPacket& p) {
-			last.move.x = p.x;
-			last.move.y = p.y;
+			state.move.x = p.x;
+			state.move.y = p.y;
+			SendLocalAsync(state.move);
 		});
 		connection.RegisterHandler<MovePacket>([this](MovePacket& p) {
 			p.id = id;
-			last.move = p;
+			state.move = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<JumpPacket>([this](JumpPacket& p) {
@@ -230,17 +234,17 @@ class ServerSideClient {
 		});
 		connection.RegisterHandler<FacingPacket>([this](FacingPacket& p) {
 			p.id = id;
-			last.facing = p;
+			state.facing = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<SpeedPacket>([this](SpeedPacket& p) {
 			p.id = id;
-			last.speed = p;
+			state.speed = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<SpritePacket>([this](SpritePacket& p) {
 			p.id = id;
-			last.sprite = p;
+			state.sprite = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<FlashPacket>([this](FlashPacket& p) {
@@ -249,22 +253,22 @@ class ServerSideClient {
 		});
 		connection.RegisterHandler<RepeatingFlashPacket>([this](RepeatingFlashPacket& p) {
 			p.id = id;
-			last.repeating_flash = p;
+			state.repeating_flash = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<RemoveRepeatingFlashPacket>([this](RemoveRepeatingFlashPacket& p) {
 			p.id = id;
-			last.repeating_flash.Discard();
+			state.repeating_flash.Discard();
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<HiddenPacket>([this](HiddenPacket& p) {
 			p.id = id;
-			last.hidden = p;
+			state.hidden = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<SystemPacket>([this](SystemPacket& p) {
 			p.id = id;
-			last.system = p;
+			state.system = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<SoundEffectPacket>([this](SoundEffectPacket& p) {
@@ -273,14 +277,14 @@ class ServerSideClient {
 		});
 		connection.RegisterHandler<ShowPicturePacket>([this](ShowPicturePacket& p) {
 			p.id = id;
-			if (last.pictures.size() < 200)
-				last.pictures[p.pic_id] = p;
+			if (state.pictures.size() < 200)
+				state.pictures[p.pic_id] = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<MovePicturePacket>([this](MovePicturePacket& p) {
 			p.id = id;
-			const auto& it = last.pictures.find(p.pic_id);
-			if(it != last.pictures.end()) {
+			const auto& it = state.pictures.find(p.pic_id);
+			if(it != state.pictures.end()) {
 				PicturePacket& pic = it->second;
 				pic.params = p.params;
 				pic = p;
@@ -289,7 +293,7 @@ class ServerSideClient {
 		});
 		connection.RegisterHandler<ErasePicturePacket>([this](ErasePicturePacket& p) {
 			p.id = id;
-			last.pictures.erase(p.pic_id);
+			state.pictures.erase(p.pic_id);
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<ShowPlayerBattleAnimPacket>([this](ShowPlayerBattleAnimPacket& p) {

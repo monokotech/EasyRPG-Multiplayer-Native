@@ -850,6 +850,7 @@ public:
 		d_notification_log.SetOverlayMode(true, true, true);
 
 		SetImmersiveMode(GMI().GetConfig().client_chat_immersive_mode.Get());
+		SetNotificationLog(GMI().GetConfig().client_chat_notifications.Get());
 		SetFocus(false);
 	}
 
@@ -1020,9 +1021,14 @@ public:
 		d_log.ToggleVisibilityFlag(v);
 	}
 
+	void SetNotificationLog(bool enable) {
+		GMI().GetConfig().client_chat_notifications.Set(enable);
+		notification_log_shown = enable;
+		d_notification_log.SetVisible(enable);
+	}
+
 	void ToggleNotificationLog() {
-		notification_log_shown = !notification_log_shown;
-		d_notification_log.SetVisible(notification_log_shown);
+		SetNotificationLog(!notification_log_shown);
 		Graphics::GetStatusTextOverlay().ShowText(
 			notification_log_shown ? "Notifications shown" : "Notifications hidden"
 		);
@@ -1106,18 +1112,22 @@ void SendKeyHash() {
 	}
 }
 
-void InitHello() {
-	AddLogEntry("", "!! • IME input now supported!", "", Messages::CV_LOCAL);
-	AddLogEntry("", "!!   (for Japanese, etc.)", "", Messages::CV_LOCAL);
-	AddLogEntry("", "!! • You can now copy and", "", Messages::CV_LOCAL);
-	AddLogEntry("", "!!   paste from type box.", "", Messages::CV_LOCAL);
-	AddLogEntry("", "!! • SHIFT+[←, →] to select text.", "", Messages::CV_LOCAL);
+void ShowWelcome() {
+	AddLogEntry("", "• IME input now supported!", "", Messages::CV_LOCAL);
+	AddLogEntry("", "  (for CJK characters, etc.)", "", Messages::CV_LOCAL);
+	AddLogEntry("", "• You can now copy and", "", Messages::CV_LOCAL);
+	AddLogEntry("", "  paste from type box.", "", Messages::CV_LOCAL);
+	AddLogEntry("", "• SHIFT+[←, →] to select text.", "", Messages::CV_LOCAL);
+#ifdef EMSCRIPTEN
+	AddLogEntry("", "• In file scene (Savegame),", "", Messages::CV_LOCAL);
+	AddLogEntry("", "  press SHIFT to upload.", "", Messages::CV_LOCAL);
+	AddLogEntry("", "  (File uploaded locally only)", "", Messages::CV_LOCAL);
+#endif
+	AddLogEntry("", "• Type !help to list commands.", "", Messages::CV_LOCAL);
 	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
 	AddLogEntry("[F3]: ", "hide/show notifications.", "", Messages::CV_LOCAL);
 	AddLogEntry("[TAB]: ", "focus/unfocus.", "", Messages::CV_LOCAL);
 	AddLogEntry("[↑, ↓]: ", "scroll.", "", Messages::CV_LOCAL);
-	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
-	AddLogEntry("• Type !help to list commands.", "", "", Messages::CV_LOCAL);
 }
 
 void ShowUsage(Strfnd& fnd) {
@@ -1428,7 +1438,7 @@ void Update() {
 			int counter = update_counter - counter_chatbox;
 			if (counter == 7) {
 				chat_box = std::make_unique<DrawableChatUi>();
-				InitHello();
+				ShowWelcome();
 				SetChatVisibility(GMI().GetConfig().client_chat_visibility.Get());
 			} else if (counter == 8) {
 				int splitscreen_mode = GMI().GetConfig().client_chat_splitscreen_mode.Get();

@@ -20,7 +20,6 @@
 #define EP_GAME_MULTIPLAYER_H
 
 #include <string>
-#include <bitset>
 #include "../string_view.h"
 #include "../game_config.h"
 #include "../game_pictures.h"
@@ -133,7 +132,7 @@ private:
 
 	std::map<int, std::string> global_players_system;
 	std::map<int, PlayerOther> players;
-	std::vector<PlayerOther> dc_players; // disconnect and player fade
+	std::vector<PlayerOther> fadeout_players;
 	std::map<std::tuple<int8_t, int16_t, int16_t>, uint8_t> players_pos_cache; // {type, x, y} = any
 	std::vector<int> sync_switches;
 	std::vector<int> sync_vars;

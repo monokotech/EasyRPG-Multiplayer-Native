@@ -38,14 +38,14 @@ struct PlayerOther {
 	// type => pos
 	std::map<int8_t, std::tuple<int8_t, int16_t, int16_t>> previous_pos;
 
-	// create a shadow of this
-	// shadow has no name, no battle animation and no move commands
+	// create a copy of this
+	// the copied player has no name, no battle animation and no move commands
 	// but it is visible, in other words this function modifies the
 	// global drawable list
 	//
-	// a shadow must be put inside dc_players after creation
-	// destroying shadows outside dc_players is undefined behavior
-	PlayerOther Shadow(int x, int y);
+	// the player must be put inside fadeout_players after creation
+	// destroying the player outside fadeout_players is undefined behavior
+	PlayerOther GetCopy();
 };
 
 #endif
