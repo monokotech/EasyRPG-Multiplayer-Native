@@ -97,6 +97,8 @@ struct Game_ConfigVideo {
 	ConfigParam<int> window_width{ "", "", "Video", "WindowWidth", -1 };
 	ConfigParam<int> window_height{ "", "", "Video", "WindowHeight", -1 };
 
+	BoolConfigParam no_pause_game_when_focus_lost{ "", "", "Video", "NoPauseGameWhenFocusLost", false };
+
 	void Hide();
 };
 
@@ -130,6 +132,7 @@ struct Game_ConfigMultiplayer {
 	BoolConfigParam client_auto_connect{ "", "", "Multiplayer", "ClientAutoConnect", false };
 	StringConfigParam client_remote_address{ "", "", "Multiplayer", "ClientRemoteAddress", "" };
 	StringConfigParam client_socks5_address{ "", "", "Multiplayer", "ClientSocks5Address", "" };
+	BoolConfigParam client_chat_notifications{ "", "", "Multiplayer", "ClientChatNotifications", true };
 	BoolConfigParam client_chat_immersive_mode{ "", "", "Multiplayer", "ClientChatImmersiveMode", false };
 	RangeConfigParam<int> client_chat_splitscreen_mode{ "", "", "Multiplayer", "ClientChatSplitScreenMode", 0, 0, 2 };
 	StringConfigParam client_chat_visibility{ "", "", "Multiplayer", "ClientChatVisibility", "" };

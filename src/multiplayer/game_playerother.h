@@ -39,6 +39,7 @@ class Game_PlayerOther : public Game_PlayerBase {
 
 		bool IsMultiplayerVisible();
 
+		// This does not cause any actual change
 		void SetMultiplayerVisible(bool mv);
 
 		int GetBaseOpacity();
@@ -52,7 +53,7 @@ class Game_PlayerOther : public Game_PlayerBase {
 		}
 
 		void UpdateNextMovementAction() override {
-			//literally just do nothing
+			// literally just do nothing
 		}
 
 		void UpdateMovement(int amount) override {

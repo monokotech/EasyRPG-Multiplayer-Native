@@ -16,16 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <array>
-#include <map>
-#include <memory>
-#include <queue>
-#include <charconv>
-#include <utility>
-#include <bitset>
-#include <algorithm>
-#include <limits>
-
 #include <lcf/data.h>
 #include <lcf/reader_util.h>
 
@@ -126,7 +116,12 @@ static bool MovePlayerToPos(Game_PlayerOther& player, int x, int y) {
 		dy = dy > 0 ? -1 : 1;
 		ady = 1;
 	}
-	if (adx > 1 || ady > 1 || (dx == 0 && dy == 0) || !player.IsMultiplayerVisible()) {
+	if (dx == 0 && dy == 0) {
+		player.SetX(x);
+		player.SetY(y);
+		return true;
+	}
+	if (adx > 1 || ady > 1 || !player.IsMultiplayerVisible()) {
 		player.SetX(x);
 		player.SetY(y);
 		return false;
@@ -154,7 +149,7 @@ void Game_Multiplayer::InitConnection() {
 
 	connection->RegisterSystemHandler(SystemMessage::OPEN, [this](Connection& _) {
 		SendBasicData();
-		connection->SendPacket(NamePacket(cfg.client_chat_name.Get()));
+		connection->SendPacketAsync<NamePacket>(NamePacket(cfg.client_chat_name.Get()));
 		CUI().SetStatusConnection(true);
 	});
 	connection->RegisterSystemHandler(SystemMessage::CLOSE, [this](Connection& _) {
@@ -281,7 +276,7 @@ void Game_Multiplayer::InitConnection() {
 			auto scene_map = Scene::Find(Scene::SceneType::Map);
 			if (!scene_map) {
 				Output::Error("MP: unexpected, {}:{}", __FILE__, __LINE__);
-				//return;
+				return;
 			}
 			auto old_list = &DrawableMgr::GetLocalList();
 			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
@@ -297,7 +292,7 @@ void Game_Multiplayer::InitConnection() {
 					Main_Data::game_switches->Flip(cfg_it->second.refresh_switch_id);
 			}
 		}
-		dc_players.emplace_back(std::move(player));
+		fadeout_players.emplace_back(std::move(player));
 		players.erase(it);
 		repeating_flashes.erase(p.id);
 		if (Main_Data::game_pictures) {
@@ -468,7 +463,7 @@ void Game_Multiplayer::InitConnection() {
 		auto scene_map = Scene::Find(Scene::SceneType::Map);
 		if (!scene_map) {
 			Output::Error("MP: unexpected, {}:{}", __FILE__, __LINE__);
-			//return;
+			return;
 		}
 		auto old_list = &DrawableMgr::GetLocalList();
 		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
@@ -582,7 +577,6 @@ void Game_Multiplayer::SwitchRoom(int map_id, bool room_switch) {
 		switched_room = false;
 	}
 	Reset();
-	dc_players.clear();
 	if (connection->IsConnected())
 		SendBasicData();
 }
@@ -590,11 +584,11 @@ void Game_Multiplayer::SwitchRoom(int map_id, bool room_switch) {
 void Game_Multiplayer::Reset() {
 	players.clear();
 	players_pos_cache.clear();
+	fadeout_players.clear();
 	sync_switches.clear();
 	sync_vars.clear();
 	sync_events.clear();
 	sync_action_events.clear();
-	sync_picture_names.clear();
 	ResetRepeatingFlash();
 	if (Main_Data::game_pictures) {
 		Main_Data::game_pictures->EraseAllMultiplayer();
@@ -627,6 +621,7 @@ void Game_Multiplayer::SendChatMessage(int visibility, std::string message, int 
 }
 
 void Game_Multiplayer::SendBasicData() {
+	connection->SendPacketAsync<RoomPacket>(room_id);
 	auto& player = Main_Data::game_player;
 	auto cfg_it = virtual_3d_map_configs.find(room_id);
 	if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.character_event_id != -1) {
@@ -644,7 +639,6 @@ void Game_Multiplayer::SendBasicData() {
 	connection->SendPacketAsync<HiddenPacket>(player->IsSpriteHidden());
 	auto sysn = Main_Data::game_system->GetSystemName();
 	connection->SendPacketAsync<SystemPacket>(ToString(sysn));
-	connection->SendPacketAsync<RoomPacket>(room_id);
 }
 
 void Game_Multiplayer::MainPlayerMoved(int dir) {
@@ -689,6 +683,8 @@ void Game_Multiplayer::MainPlayerChangedSpriteHidden(bool hidden) {
 }
 
 void Game_Multiplayer::MainPlayerTeleported(int map_id, int x, int y) {
+	/* Sometimes the starting position is not as expected,
+	 *  but is moved through teleportation again */
 	connection->SendPacketAsync<TeleportPacket>(x, y);
 }
 
@@ -894,11 +890,13 @@ void Game_Multiplayer::MapUpdate() {
 			auto& q = p.second.mvq;
 			auto& ch = p.second.ch;
 			// if player moves too fast
+			bool is_mvq_truncated = false;
 			if (q.size() > settings.moving_queue_limit) {
 				q.erase(
 					q.begin(),
 					std::next(q.begin(), q.size() - settings.moving_queue_limit)
 				);
+				is_mvq_truncated = true;
 			}
 			if (!q.empty() && is_virtual_3d_map) {
 				auto [type, x, y] = q.front();
@@ -914,29 +912,30 @@ void Game_Multiplayer::MapUpdate() {
 			}
 			if (!q.empty() && ch->IsStopping()) {
 				auto [_, x, y] = q.front();
-				MovePlayerToPos(*ch, x, y);
-				if (!switched_room) {
+				int prev_x{ch->GetX()}, prev_y{ch->GetY()};
+				bool is_normal_move = MovePlayerToPos(*ch, x, y);
+				if (switched_room) {
+					// only for teleportation
+					if (ch->IsMultiplayerVisible() && !is_mvq_truncated && !is_normal_move) {
+						ch->SetBaseOpacity(0); // prepare to fade-in at new position
+						PlayerOther shadow = p.second.GetCopy();
+						shadow.ch->SetX(prev_x);
+						shadow.ch->SetY(prev_y);
+						fadeout_players.emplace_back(std::move(shadow));
+					}
+				} else { // when you enter the room
 					ch->SetMultiplayerVisible(true);
 					ch->SetBaseOpacity(32);
 				}
-				// Re-implement when we find a way to improve this visually
-				/*struct {
-					int x, y;
-				} previous{
-					ch->GetX(), ch->GetY()
-				};
-				auto isNormalMove = MovePlayerToPos(*ch, x, y);
-				if (!isNormalMove) {
-					// fade in at new position
-					ch->SetBaseOpacity(0);
-					dc_players.emplace_back(p.second.Shadow(previous.x, previous.y));
-				}*/
 				q.pop_front();
+				// when others enter the room
 				if (!ch->IsMultiplayerVisible()) {
 					ch->SetMultiplayerVisible(true);
 				}
 			}
-			if (ch->IsMultiplayerVisible() && ch->GetBaseOpacity() < 32) {
+			/* !ch->IsSpriteHidden(): player enters the map, screen is black,
+			 *  and hidden is true, until transition complete */
+			if (ch->IsMultiplayerVisible() && !ch->IsSpriteHidden() && ch->GetBaseOpacity() < 32) {
 				ch->SetBaseOpacity(ch->GetBaseOpacity() + 1);
 			}
 			ch->SetProcessed(false);
@@ -949,8 +948,8 @@ void Game_Multiplayer::MapUpdate() {
 				int y = ch->GetY();
 				for (auto& p2 : players) {
 					auto& ch2 = p2.second.ch;
-					int x2 = ch2->GetX();
-					if (x == x2) {
+					// are players and players overlapping?
+					if (x == ch2->GetX()) {
 						int y2 = ch2->GetY();
 						if (y == 0) {
 							if (Game_Map::LoopVertical() && y2 == Game_Map::GetTilesY() - 1) {
@@ -965,6 +964,7 @@ void Game_Multiplayer::MapUpdate() {
 				}
 				if (!overlap) {
 					auto& player = Main_Data::game_player;
+					// do players overlap with you?
 					if (x == player->GetX()) {
 						if (y == 0) {
 							if (Game_Map::LoopVertical() && player->GetY() == Game_Map::GetTilesY() - 1) {
@@ -989,7 +989,7 @@ void Game_Multiplayer::MapUpdate() {
 			Main_Data::game_switches->Flip(virtual_3d_refresh_switch_id);
 	}
 
-	if (!dc_players.empty()) {
+	if (!fadeout_players.empty()) {
 		auto scene_map = Scene::Find(Scene::SceneType::Map);
 		if (!scene_map) {
 			Output::Error("MP: unexpected, {}:{}", __FILE__, __LINE__);
@@ -999,16 +999,16 @@ void Game_Multiplayer::MapUpdate() {
 		auto old_list = &DrawableMgr::GetLocalList();
 		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
 
-		for (auto dcpi = dc_players.rbegin(); dcpi != dc_players.rend();) {
-			auto& ch = dcpi->ch;
+		for (auto fopi = fadeout_players.rbegin(); fopi != fadeout_players.rend();) {
+			auto& ch = fopi->ch;
 			if (ch->GetBaseOpacity() > 0) {
 				ch->SetBaseOpacity(ch->GetBaseOpacity() - 1);
 				ch->SetProcessed(false);
 				ch->Update();
-				dcpi->sprite->Update();
-				++dcpi;
+				fopi->sprite->Update();
+				++fopi;
 			} else {
-				dcpi = decltype(dcpi)(dc_players.erase(dcpi.base() - 1));
+				fopi = decltype(fopi)(fadeout_players.erase(fopi.base() - 1));
 			}
 		}
 
