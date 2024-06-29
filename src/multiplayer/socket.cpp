@@ -333,7 +333,7 @@ void Socket::InternalCloseSocket() {
 		socket->is_initialized = false;
 		socket->m_send_queue = decltype(m_send_queue){};
 		socket->is_sending = false;
-		socket->OnClose();
+		if (socket->OnClose) socket->OnClose();
 	});
 }
 

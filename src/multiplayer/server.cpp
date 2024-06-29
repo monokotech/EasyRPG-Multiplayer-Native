@@ -513,9 +513,12 @@ void ServerMain::Start(bool wait_thread) {
 
 	auto CreateServerSideClient = [this](std::unique_ptr<Socket> socket) {
 		if (clients.size() >= cfg.server_max_users.Get()) {
-			std::string_view data = "\uFFFD1";
-			socket->Send(data);
+			socket->OnInfo = [](std::string_view m) {
+				OutputMt::Info("S: {} (Too many users)", m);
+			};
+			socket->Send("\uFFFD1");
 			socket->Close();
+			socket->AsyncKeepAlive(socket);
 		} else {
 			auto& client = clients[client_id];
 			client.reset(new ServerSideClient(this, client_id++, std::move(socket)));
