@@ -10,9 +10,11 @@ Refer to game_multiplayer.{cpp,h}
 
 server.{cpp,h}
 --------------
+GNU Affero General Public License, Version 3
 Copyright (C) 2023 Monokotech
 (References: game_multiplayer.cpp,
- client_connection.cpp, and ynop-ynoserver)
+ client_connection.cpp, and ynop-ynoserver.
+ Authors: twig33, aleck099, Flashfyre, maru, etc.)
 
 game_multiplayer.{cpp,h}
 ------------------------
